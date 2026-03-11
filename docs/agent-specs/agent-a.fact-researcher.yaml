@@ -36,7 +36,32 @@ input_schema:
     judge_tasks:
       type: array
       items:
-        type: string
+        type: object
+        required:
+          - task_type
+          - target_agent
+          - description
+          - blocking
+        properties:
+          task_type:
+            type: string
+            enum:
+              - "FACT_RESEARCH"
+              - "STRATEGY_REFRAME"
+              - "EVIDENCE_REFRESH"
+              - "COMPETITOR_EXPANSION"
+              - "MONETIZATION_REWORK"
+              - "ICP_REFOCUS"
+              - "MVP_RESCOPING"
+              - "GTM_REWORK"
+              - "TERMINAL_RISK_CONFIRMATION"
+          target_agent:
+            type: string
+            enum: ["FACT_RESEARCHER", "OPPORTUNITY_STRATEGIST"]
+          description:
+            type: string
+          blocking:
+            type: boolean
 
 rules:
   - "Use latest available information where possible."
@@ -44,6 +69,8 @@ rules:
   - "Include source date for each major factual claim."
   - "If evidence is indirect, label it as indirect evidence."
   - "Focus on practical workflow and operational pain, not abstract market commentary."
+  - "Receive judge_tasks as structured JudgeTask objects; the prompt renderer may additionally provide a readable bullet summary."
+  - "Only tasks targeted at FACT_RESEARCHER should be executed by this agent."
 
 required_sections:
   - "Market Problem Definition"

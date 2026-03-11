@@ -492,6 +492,7 @@ The system must:
 Command semantics:
 - `/approve` is an operator override command, not a required step after PASS
 - `/reject` is an operator override command for force-reject or manual closure
+- `/next-topic` retrieves the next pending case from persisted storage using the backend selection policy
 
 ---
 

@@ -133,6 +133,11 @@ Fields:
 - description
 - blocking
 
+Runtime contract:
+- Agent A and Agent B receive `JudgeTask[]` objects as canonical rerun input
+- prompt rendering may derive a human-readable bullet list from those objects for model readability
+- the worker should pass only the tasks relevant to the target agent unless a debug/manual-review path explicitly requires full visibility
+
 ---
 
 ## 6. State Machine
@@ -356,6 +361,15 @@ Allowed only when status = APPROVED_FOR_PRD or COMPLETED without PRD.
 ### 11.9 POST /api/cases/{caseId}/generate-poc
 Allowed only after PRD exists.
 
+### 11.10 GET /api/cases/next-topic
+Returns the next pending case summary from persisted storage.
+
+Selection policy:
+- include actionable pending cases only: `TOPIC_ACCEPTED`, `REVISE_REQUIRED`, `PIVOT_REQUIRED`, and `FAILED` when `manualReviewRequired = true`
+- exclude active in-flight states and terminal states without manual review requirement
+- order by `createdAt` ascending, then `caseId` ascending for deterministic selection
+- return no result when no pending case matches the policy
+
 ---
 
 ## 12. Telegram Command Mapping
@@ -378,6 +392,7 @@ Mapping:
 - /reject -> POST /api/cases/{caseId}/reject
 - /prd -> POST /api/cases/{caseId}/generate-prd
 - /poc -> POST /api/cases/{caseId}/generate-poc
+- /next-topic -> GET /api/cases/next-topic
 
 ---
 
@@ -422,7 +437,7 @@ Prompts should be template-driven.
 Inputs:
 - case metadata
 - iteration number
-- judge tasks if any
+- judge tasks if any as structured `JudgeTask[]`
 - prior agent outputs
 - scoring rubric
 - stop conditions
@@ -431,9 +446,10 @@ Inputs:
 Rendering stages:
 1. load system spec
 2. load role instructions
-3. inject structured context
-4. inject formatting and output constraints
-5. attach schema reminder
+3. inject structured context, including canonical `JudgeTask[]` input when present
+4. derive a readable task summary from `JudgeTask[]` for the model when useful
+5. inject formatting and output constraints
+6. attach schema reminder
 
 ---
 

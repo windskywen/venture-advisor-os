@@ -25,8 +25,8 @@ Use this file as the ordered build checklist and requirement coverage map.
 ## 0. Contract Alignment and Open Decisions
 - [x] T0001 Align PASS flow, manual override semantics, Judge task contract, and failure model across specs.
 - [x] T0002 Rename the technical spec file and remove workflow/API drift from the docs.
-- [ ] T0003 Resolve the `judge_tasks` input contract for Agent A and Agent B so it matches the structured Judge task object contract used by the orchestrator.
-- [ ] T0004 Define the backend contract and selection policy for `/next-topic`, including whether it is a pure Telegram/operator workflow or a persisted API-level capability.
+- [x] T0003 Resolve the `judge_tasks` input contract for Agent A and Agent B: canonical runtime input is structured `JudgeTask[]`, while the prompt renderer may derive human-readable bullets from those objects.
+- [x] T0004 Define `/next-topic` as a persisted API-backed capability that returns the next pending case from storage using deterministic oldest-first selection across actionable pending states.
 - [ ] T0005 Record any future source-of-truth doc changes in this backlog before implementation starts.
 
 ## 1. Monorepo and Developer Foundation
@@ -39,7 +39,7 @@ Use this file as the ordered build checklist and requirement coverage map.
 
 ## 2. Shared Domain Contracts and Config
 - [ ] T2001 Implement shared enums for case status, Judge decision, agent name, Judge task type, override action, failure category, rejection category, permission level, and prompt template version state.
-- [ ] T2002 Implement shared DTOs for case create/start/status/iterations/outputs/approve/reject/generate-prd/generate-poc and any `/next-topic` contract chosen in T0004.
+- [ ] T2002 Implement shared DTOs for case create/start/status/iterations/outputs/approve/reject/generate-prd/generate-poc and `next-topic` response contracts.
 - [ ] T2003 Implement shared schemas for `OpportunityCase`, `Iteration`, `AgentOutput`, `JudgeTask`, `ScoreDetail`, `Approval`, `AuditLog`, and approved business summary artifacts.
 - [ ] T2004 Implement shared schemas for normalized outputs of Agent A, B, C, J, D, and E.
 - [ ] T2005 Implement environment-driven config for thresholds and limits: VC pass, evidence pass, max iterations, minimum score improvement, max stagnant iterations, timeout budgets, and standard-vs-complex topic iteration overrides.
@@ -48,6 +48,7 @@ Use this file as the ordered build checklist and requirement coverage map.
 - [ ] T2008 Encode the shared `common.base.yaml` conventions in code: decision labels, scoring scale `1-10`, markdown section requirement, JSON summary requirement, citation requirement for facts, and explicit fact/inference/assumption separation.
 - [ ] T2009 Externalize orchestration thresholds and routing policy so score and loop-control behavior is configurable rather than hard-coded.
 - [ ] T2010 Add schema-level validation for required markdown section names even when the normalized JSON omits some rendered sections.
+- [ ] T2011 Implement a shared JudgeTask type used consistently by storage, orchestration, API, and Agent A/B prompt inputs.
 
 ## 3. Persistence and Artifact Storage
 - [ ] T3001 Create database migrations for `opportunity_cases`, `case_iterations`, `agent_outputs`, `judge_tasks`, `score_details`, `audit_logs`, `approvals`, and `prompt_template_versions`.
@@ -58,6 +59,7 @@ Use this file as the ordered build checklist and requirement coverage map.
 - [ ] T3006 Add transactional guards so workflow state is not advanced unless DB and storage writes succeed.
 - [ ] T3007 Preserve immutable iteration snapshots, versioned outputs, and reusable research artifact refs across revise/pivot flows.
 - [ ] T3008 Persist score details per dimension plus computed summary scores needed by routing logic, including VC average and Judge evidence scoring inputs.
+- [ ] T3009 Add repository query support and indexing for deterministic next-pending-case selection by actionable status and creation order.
 
 ## 4. Workflow Core and Orchestration
 - [ ] T4001 Implement the case state machine with the allowed transitions from the technical spec.
@@ -74,10 +76,10 @@ Use this file as the ordered build checklist and requirement coverage map.
 - [ ] T4012 Prevent D/E execution unless the latest Judge decision is PASS and the current case state allows downstream generation.
 - [ ] T4013 Implement partial rerun exception rules: allow C-only reruns only for formatting-only upstream changes and allow J-only reruns only for system error recovery.
 - [ ] T4014 Detect contradictory agent outputs, invalid Judge decision schema, and low-value dead-end loops; route those cases to manual review or terminal rejection.
-- [ ] T4015 Implement workflow events for rejection escalation and `/next-topic` continuation once T0004 is resolved.
+- [ ] T4015 Implement workflow events for rejection escalation and `/next-topic` continuation using the persisted next-pending-case selection policy.
 
 ## 5. Agent Runtime, Prompting, and Normalization
-- [ ] T5001 Implement a prompt renderer that combines base spec, agent role instructions, case context, prior outputs, Judge tasks, scoring rubric, stop conditions, and output schema.
+- [ ] T5001 Implement a prompt renderer that combines base spec, agent role instructions, case context, prior outputs, structured Judge tasks, scoring rubric, stop conditions, and output schema.
 - [ ] T5002 Implement a runtime adapter interface for agent execution; start with a mock executor and keep the Copilot/Codex adapter behind the same contract.
 - [ ] T5003 Implement a safe research tool abstraction for latest-market-information retrieval, source capture, freshness tracking, and citation metadata.
 - [ ] T5004 Implement FactResearcher execution and normalization with evidence dates, facts vs assumptions, competitor mapping, workflow gaps, and source metadata.
@@ -92,6 +94,7 @@ Use this file as the ordered build checklist and requirement coverage map.
 - [ ] T5013 Enforce `common.base.yaml` output conventions across all agents: markdown sections, JSON summary presence, citations for factual claims, explicit fact/inference/assumption labeling, and scoring scale compliance.
 - [ ] T5014 Validate every agent's required markdown sections, including sections not fully represented in the YAML JSON schema, before accepting output as normalized.
 - [ ] T5015 Ensure Agent A/B/C/J inputs and outputs remain traceable across iterations and reruns so downstream prompts can reference prior evidence cleanly.
+- [ ] T5016 Pass structured JudgeTask[] into Agent A/B at runtime and render a readable bullet summary from those objects for model consumption.
 
 ## 6. Gateway API
 - [ ] T6001 Implement `POST /api/cases` for topic intake with topic, region, founder profile, preferred business models, constraints, default iteration budget, and initial `TOPIC_ACCEPTED` status.
@@ -103,9 +106,10 @@ Use this file as the ordered build checklist and requirement coverage map.
 - [ ] T6007 Implement `POST /api/cases/{caseId}/reject` for operator force-reject/manual closure only.
 - [ ] T6008 Implement `POST /api/cases/{caseId}/generate-prd` with correct downstream gating.
 - [ ] T6009 Implement `POST /api/cases/{caseId}/generate-poc` with correct downstream gating.
-- [ ] T6010 Add request validation, authentication between Telegram and API, correlation IDs, and idempotency protections.
-- [ ] T6011 Keep case create/start APIs fast and non-blocking by queuing long-running agent work and returning accepted responses quickly.
-- [ ] T6012 Expose a basic health/metrics surface for worker, queue, DB, and storage readiness.
+- [ ] T6010 Implement `GET /api/cases/next-topic` to return the next pending persisted case using deterministic selection policy and an empty result when none exists.
+- [ ] T6011 Add request validation, authentication between Telegram and API, correlation IDs, and idempotency protections.
+- [ ] T6012 Keep case create/start APIs fast and non-blocking by queuing long-running agent work and returning accepted responses quickly.
+- [ ] T6013 Expose a basic health/metrics surface for worker, queue, DB, and storage readiness.
 
 ## 7. Telegram Bot
 - [ ] T7001 Implement `/newidea {topic}` to create a case.
@@ -114,7 +118,7 @@ Use this file as the ordered build checklist and requirement coverage map.
 - [ ] T7004 Implement `/approve {caseId} {action}` as an operator override command only.
 - [ ] T7005 Implement `/reject {caseId}` as an operator override/manual closure command only.
 - [ ] T7006 Implement `/prd {caseId}` and `/poc {caseId}` for downstream generation requests within allowed states.
-- [ ] T7007 Implement `/next-topic` routing behavior once T0004 defines whether it is API-backed, operator-only, or portfolio-manager-backed.
+- [ ] T7007 Implement `/next-topic` by calling the persisted backend endpoint and returning the selected next pending case or an explicit empty-state response.
 - [ ] T7008 Implement webhook or polling runner plus webhook secret validation.
 - [ ] T7009 Keep Telegram as a control plane only; do not support document editing or arbitrary shell/path input.
 - [ ] T7010 Send compact summaries for workflow start, Judge decisions, revise/pivot tasks, rejection rationale, and PRD/POC readiness.
@@ -150,7 +154,7 @@ Use this file as the ordered build checklist and requirement coverage map.
 - [ ] T11001 Add unit tests for shared schemas, state transitions, score calculations, stagnation rules, fatal flaw rules, and Judge task classification.
 - [ ] T11002 Add integration tests for repositories, storage, queue workers, prompt registry loading, and env/config validation.
 - [ ] T11003 Add end-to-end tests for baseline PASS, REVISE, PIVOT, REJECT, malformed output handling, storage failure handling, schema validation failure, and manual overrides.
-- [ ] T11004 Add Telegram-to-API integration tests for supported commands.
+- [ ] T11004 Add Telegram-to-API integration tests for supported commands, including `/next-topic` selection and empty-state behavior.
 - [ ] T11005 Verify that all required output sections exist for Agent A, B, C, J, business plan, PRD, and POC documents.
 - [ ] T11006 Validate that downstream documents are never generated before PASS.
 - [ ] T11007 Validate that users can query case status at any time during asynchronous execution.
@@ -187,7 +191,7 @@ Use this file as the ordered build checklist and requirement coverage map.
 | PRD 14.10 Persistence and audit | T3001-T3008, T5011, T10001-T10004, T11008 |
 | PRD 15.1 Reliability | T3006, T4011-T4014, T5012, T11003 |
 | PRD 15.2 Auditability | T3004-T3008, T10001-T10004, T11008 |
-| PRD 15.3 Maintainability | T1001-T1006, T2001-T2010, T10005 |
+| PRD 15.3 Maintainability | T1001-T1006, T2001-T2011, T10005 |
 | PRD 15.4 Extensibility | T1001, T2007-T2009, T5002, T12001-T12005 |
 | PRD 15.5 Security | T9001-T9007 |
 | PRD 15.6 Performance | T4002, T6002, T6011, T7003, T11007 |
@@ -201,9 +205,9 @@ Use this file as the ordered build checklist and requirement coverage map.
 | Orchestrator routing and rerun rules | T4003-T4015, T11001, T11003 |
 | Orchestrator score, stagnation, fatal flaw, and termination rules | T2005, T4008-T4014, T3008, T11001 |
 | Orchestrator portfolio and override rules | T4008, T4010, T4015, T12001 |
-| Technical spec API, queue, storage, and failure handling | T3001-T3008, T4002, T4011, T6001-T6012 |
+| Technical spec API, queue, storage, and failure handling | T3001-T3009, T4002, T4011, T6001-T6013 |
 | Agent spec common base conventions | T2008, T5013, T11009 |
-| Agent spec contracts A-E and J | T2004, T5004-T5015, T11005 |
+| Agent spec contracts A-E and J | T2004, T2011, T5004-T5016, T11005 |
 
 ## Release Gates
 - [ ] G001 A user can create and start a case from Telegram.
