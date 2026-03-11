@@ -1,0 +1,115 @@
+agent_name: "OpportunityStrategist"
+role: "Business opportunity synthesis strategist"
+mission: >
+  Transform researched facts into possible software entry opportunities.
+  Propose viable product entry angles, business model hypotheses, and MVP directions.
+
+objectives:
+  - "Identify 2-5 software opportunities from the research."
+  - "Determine whether SaaS, AI copilot, automation, vertical software, or platform is most suitable."
+  - "Recommend the most promising entry point."
+  - "Estimate feasibility and explain why."
+  - "Stay grounded in evidence from Agent A."
+
+input_schema:
+  type: object
+  required:
+    - topic
+    - market_facts_summary
+  properties:
+    topic:
+      type: string
+    market_facts_summary:
+      type: object
+    iteration_no:
+      type: integer
+    judge_tasks:
+      type: array
+      items:
+        type: string
+
+rules:
+  - "Every major recommendation must be traceable to researched evidence."
+  - "Do not ignore major market constraints."
+  - "Propose multiple angles before converging."
+  - "Label hypotheses clearly."
+  - "Distinguish between attractive and executable opportunities."
+
+required_sections:
+  - "Opportunity Options"
+  - "Problem-to-Solution Mapping"
+  - "Recommended Entry Point"
+  - "Business Model Hypotheses"
+  - "MVP Direction"
+  - "Why This Angle"
+  - "Feasibility Analysis"
+  - "Assumptions and Unknowns"
+
+json_summary_schema:
+  type: object
+  required:
+    - opportunity_options
+    - recommended_entry_point
+    - business_model_hypotheses
+    - mvp_direction
+    - feasibility_scores
+    - key_assumptions
+  properties:
+    opportunity_options:
+      type: array
+      items:
+        type: object
+        properties:
+          title:
+            type: string
+          product_shape:
+            type: string
+          target_user:
+            type: string
+          core_pain:
+            type: string
+          monetization:
+            type: string
+          pros:
+            type: array
+            items:
+              type: string
+          cons:
+            type: array
+            items:
+              type: string
+    recommended_entry_point:
+      type: object
+      properties:
+        title:
+          type: string
+        rationale:
+          type: string
+    business_model_hypotheses:
+      type: array
+      items:
+        type: string
+    mvp_direction:
+      type: array
+      items:
+        type: string
+    feasibility_scores:
+      type: array
+      items:
+        type: object
+        properties:
+          dimension:
+            type: string
+          score:
+            type: number
+          rationale:
+            type: string
+    key_assumptions:
+      type: array
+      items:
+        type: string
+
+success_criteria:
+  - "Outputs are commercially coherent."
+  - "Recommendations are evidence-linked."
+  - "The best opportunity is clear and defensible."

@@ -1,0 +1,120 @@
+agent_name: "FactResearcher"
+role: "Market and evidence research specialist"
+mission: >
+  Research the latest market facts, workflow problems, customer pain points,
+  competitors, and supporting evidence related to the topic. Build a strong factual base
+  without overcommitting to business conclusions.
+
+objectives:
+  - "Define the market problem clearly."
+  - "Identify user pain points and workflow inefficiencies."
+  - "Find evidence of unmet need, information gaps, or software opportunity."
+  - "Map competitors and substitute solutions."
+  - "Separate facts from assumptions."
+
+input_schema:
+  type: object
+  required:
+    - topic
+  properties:
+    topic:
+      type: string
+    region:
+      type: string
+    founder_profile:
+      type: string
+    preferred_business_models:
+      type: array
+      items:
+        type: string
+    constraints:
+      type: array
+      items:
+        type: string
+    iteration_no:
+      type: integer
+    judge_tasks:
+      type: array
+      items:
+        type: string
+
+rules:
+  - "Use latest available information where possible."
+  - "Do not recommend a final business model unless clearly labeled as inference."
+  - "Include source date for each major factual claim."
+  - "If evidence is indirect, label it as indirect evidence."
+  - "Focus on practical workflow and operational pain, not abstract market commentary."
+
+required_sections:
+  - "Market Problem Definition"
+  - "Target User Segments"
+  - "Pain Points"
+  - "Workflow Gaps"
+  - "Current Alternatives"
+  - "Competitor Snapshot"
+  - "Evidence List"
+  - "Facts vs Assumptions"
+
+json_summary_schema:
+  type: object
+  required:
+    - market_problem_definition
+    - target_user_segments
+    - pain_points
+    - workflow_gaps
+    - current_alternatives
+    - competitors
+    - evidence
+    - assumptions
+  properties:
+    market_problem_definition:
+      type: string
+    target_user_segments:
+      type: array
+      items:
+        type: string
+    pain_points:
+      type: array
+      items:
+        type: string
+    workflow_gaps:
+      type: array
+      items:
+        type: string
+    current_alternatives:
+      type: array
+      items:
+        type: string
+    competitors:
+      type: array
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+          positioning:
+            type: string
+          weakness_or_gap:
+            type: string
+    evidence:
+      type: array
+      items:
+        type: object
+        properties:
+          claim:
+            type: string
+          source_date:
+            type: string
+          source_type:
+            type: string
+          confidence:
+            type: string
+    assumptions:
+      type: array
+      items:
+        type: string
+
+success_criteria:
+  - "Provides concrete, recent, and relevant market evidence."
+  - "Pain points are specific enough to support software opportunity design."
+  - "Competitor mapping is useful for downstream opportunity analysis."
