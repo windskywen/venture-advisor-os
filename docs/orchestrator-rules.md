@@ -122,12 +122,13 @@ Judge returns PASS when:
 
 Actions:
 1. set case status = APPROVED_FOR_PRD
-2. enqueue Agent D
-3. after D success, enqueue Agent E
-4. compose final business plan
+2. compose final business plan and approved business summary from the approved iteration outputs
+3. enqueue Agent D
+4. after D success, enqueue Agent E
 5. set case status = COMPLETED
 
 PASS is final for validation loop.
+PASS does not require a separate manual approval step unless a human explicitly invokes the manual review escape hatch.
 
 ---
 
@@ -413,6 +414,12 @@ Each judge task must be classified to one of:
 - GTM_REWORK
 - TERMINAL_RISK_CONFIRMATION
 
+Judge task object contract:
+- `task_type`: one of the enum values above
+- `target_agent`: `FACT_RESEARCHER` or `OPPORTUNITY_STRATEGIST`
+- `description`: concrete rerun instruction
+- `blocking`: boolean indicating whether the next iteration must address it before PASS is possible
+
 Routing example:
 
 FACT_RESEARCH -> Agent A
@@ -494,12 +501,13 @@ Manual review may be required when:
 - human wants override
 
 Manual override options:
-- force REVISE
-- force PIVOT
-- force PASS_TO_PRD
-- force REJECT
+- FORCE_REVISE
+- FORCE_PIVOT
+- FORCE_PASS_TO_PRD
+- FORCE_REJECT
 
 All overrides must be audit logged.
+These overrides are operator-only escape hatches and are not part of the normal PASS flow.
 
 ---
 

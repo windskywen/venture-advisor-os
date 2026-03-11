@@ -104,6 +104,8 @@ Fields:
 - currentIteration
 - maxIterations
 - finalDecision
+- failureCategory
+- manualReviewRequired
 
 ### 5.2 Iteration
 Represents one evaluation cycle for a case.
@@ -121,6 +123,15 @@ A persisted normalized output from one agent run.
 
 ### 5.4 Judge Task
 A structured follow-up task emitted by Judge for revise or pivot.
+
+Fields:
+- taskId
+- caseId
+- iterationNo
+- taskType
+- targetAgent
+- description
+- blocking
 
 ---
 
@@ -186,10 +197,12 @@ Allowed transitions:
 4. Re-run J
 
 ### 7.4 PASS flow
-1. Run D to generate PRD
-2. Run E to generate POC
-3. Compose final business plan
+1. Compose final business plan and approved business summary from the approved iteration outputs
+2. Run D to generate PRD
+3. Run E to generate POC
 4. Mark case as COMPLETED
+
+PASS automatically advances to downstream generation unless a manual override pauses or redirects the case.
 
 ---
 
@@ -216,7 +229,7 @@ Retry policy:
 - transient infrastructure errors: retry up to 3
 - schema validation errors: do not retry automatically
 - agent timeout: retry once
-- repeated agent invalid output: mark case FAILED_REVIEW and require manual inspect
+- repeated agent invalid output: mark case FAILED, set failureCategory, and require manual inspect
 
 ---
 
@@ -244,6 +257,10 @@ Fields:
 - resolvedBy
 - metadata
 
+Semantics:
+- stores manual override and human review records
+- not required for the normal PASS -> business plan -> PRD -> POC path
+
 ### Additional table: prompt_template_versions
 Fields:
 - templateVersionId
@@ -260,6 +277,7 @@ Fields:
 
 /storage/cases/{caseId}/
   case.json
+  approved_business_summary.json
   final_business_plan.md
   prd.md
   poc_spec.md
@@ -321,11 +339,16 @@ Returns latest normalized outputs and file refs.
 
 ### 11.6 POST /api/cases/{caseId}/approve
 Body:
-- action: string
+- action: `FORCE_REVISE` | `FORCE_PIVOT` | `FORCE_PASS_TO_PRD`
+- reason?: string
+
+Use only for operator overrides. This endpoint is not required after a normal Judge PASS.
 
 ### 11.7 POST /api/cases/{caseId}/reject
 Body:
 - reason?: string
+
+Use for operator force-reject or manual closure.
 
 ### 11.8 POST /api/cases/{caseId}/generate-prd
 Allowed only when status = APPROVED_FOR_PRD or COMPLETED without PRD.
@@ -341,7 +364,6 @@ Commands:
 - /newidea {topic}
 - /startcase {caseId}
 - /status {caseId}
-- /review {caseId}
 - /approve {caseId} {action}
 - /reject {caseId}
 - /prd {caseId}
@@ -455,9 +477,7 @@ Rules:
 ### Judge score dimensions
 - evidenceCompleteness
 - evidenceFreshness
-- assumptionRisk
-- rebuttalStrength
-- businessViabilityConfidence
+- evidenceConfidence
 - iterationWorthiness
 
 ### Decision heuristics
@@ -582,7 +602,7 @@ Recommended:
 ### Handling
 - infra failure -> retry
 - malformed output -> retry once with stricter formatting reminder
-- repeated normalization failure -> mark FAILED
+- repeated normalization failure -> mark FAILED and set `manualReviewRequired = true`
 - storage failure -> do not advance workflow
 - judge dead-end -> require manual inspect or reject case
 

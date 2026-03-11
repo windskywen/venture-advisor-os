@@ -45,6 +45,7 @@ rules:
   - "When decision is REVISE or PIVOT, generate explicit tasks."
   - "If iteration value is low, reject instead of looping."
   - "Use termination warning when one more weak cycle should end the topic."
+  - "When emitting next_iteration_tasks, use only the approved task_type and target_agent enums."
 
 allowed_decisions:
   - "PASS"
@@ -110,10 +111,23 @@ json_summary_schema:
         properties:
           target_agent:
             type: string
+            enum: ["FACT_RESEARCHER", "OPPORTUNITY_STRATEGIST"]
           task_type:
             type: string
+            enum:
+              - "FACT_RESEARCH"
+              - "STRATEGY_REFRAME"
+              - "EVIDENCE_REFRESH"
+              - "COMPETITOR_EXPANSION"
+              - "MONETIZATION_REWORK"
+              - "ICP_REFOCUS"
+              - "MVP_RESCOPING"
+              - "GTM_REWORK"
+              - "TERMINAL_RISK_CONFIRMATION"
           description:
             type: string
+          blocking:
+            type: boolean
     termination_warning:
       type: boolean
 

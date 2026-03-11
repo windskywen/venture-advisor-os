@@ -1,7 +1,7 @@
 ## Comprehensive Product Requirements Document
 
 **Version:** 1.0  
-**Status
+**Status:** Draft
 **Product Type:** Multi-agent startup opportunity evaluation and product planning system  
 **Primary Interface:** Telegram Bot + Codex/Copilot-assisted development workflow  
 **Execution Core:** Agent orchestrator with iterative Judge loop
@@ -269,6 +269,8 @@ The system generates:
 - PRD
 - POC specification
 
+PASS automatically advances the workflow. No separate manual approval is required in the normal path.
+
 ### 12.7 If REJECT
 The case is closed and recorded as a rejected topic.
 
@@ -475,6 +477,7 @@ The system must:
 - report Judge decisions
 - report PRD/POC readiness
 - support status querying
+- support operator override commands for exceptional manual review cases only
 
 ### Supported commands for MVP
 - `/newidea`
@@ -485,6 +488,10 @@ The system must:
 - `/prd`
 - `/poc`
 - `/next-topic`
+
+Command semantics:
+- `/approve` is an operator override command, not a required step after PASS
+- `/reject` is an operator override command for force-reject or manual closure
 
 ---
 
@@ -750,7 +757,6 @@ If fatal flaws remain unresolved and there is no credible path to disprove them,
 - Should the system support multiple research styles by market type?
 - How much browsing autonomy should agents have in future versions?
 - Should portfolio management be part of MVP or Phase 2?
-- Should business plan generation happen before or alongside PRD generation after PASS?
 - How much scoring should be hard-coded versus configurable?
 - Should users be able to define their own Judge thresholds?
 
@@ -765,7 +771,7 @@ The product is acceptable for MVP when:
 3. Judge can produce PASS, REVISE, PIVOT, or REJECT
 4. REVISE and PIVOT can trigger targeted rerun logic
 5. REJECT stops downstream progression
-6. PASS triggers business plan, PRD, and POC generation
+6. PASS automatically triggers business plan, PRD, and POC generation
 7. Outputs are stored and retrievable
 8. Score details and audit logs are persisted
 9. Telegram can report current case status and final decision
@@ -785,4 +791,3 @@ The system’s core advantage is the combination of:
 - gated PRD/POC generation
 
 That makes it useful for founders who want not merely more ideas, but better decisions.
-"""
