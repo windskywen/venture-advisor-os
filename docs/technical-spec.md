@@ -348,6 +348,7 @@ Body:
 - reason?: string
 
 Use only for operator overrides. This endpoint is not required after a normal Judge PASS.
+When `FORCE_PASS_TO_PRD` is used, the latest completed iteration becomes the approved source iteration for `approved_business_summary`, the final business plan, PRD generation, and POC generation.
 
 ### 11.7 POST /api/cases/{caseId}/reject
 Body:
@@ -366,8 +367,9 @@ Returns the next pending case summary from persisted storage.
 
 Selection policy:
 - include actionable pending cases only: `TOPIC_ACCEPTED`, `REVISE_REQUIRED`, `PIVOT_REQUIRED`, and `FAILED` when `manualReviewRequired = true`
+- prioritize fresh actionable topics first: `TOPIC_ACCEPTED`, `REVISE_REQUIRED`, and `PIVOT_REQUIRED` rank ahead of `FAILED` cases awaiting manual review
+- within each priority group, order by `createdAt` ascending, then `caseId` ascending for deterministic selection
 - exclude active in-flight states and terminal states without manual review requirement
-- order by `createdAt` ascending, then `caseId` ascending for deterministic selection
 - return no result when no pending case matches the policy
 
 ---

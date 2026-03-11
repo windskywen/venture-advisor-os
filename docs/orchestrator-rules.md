@@ -508,6 +508,7 @@ Manual override options:
 
 All overrides must be audit logged.
 These overrides are operator-only escape hatches and are not part of the normal PASS flow.
+When `FORCE_PASS_TO_PRD` is used, the latest completed iteration becomes the approved source iteration for `approved_business_summary`, the final business plan, PRD generation, and POC generation.
 
 ---
 

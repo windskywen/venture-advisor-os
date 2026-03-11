@@ -26,7 +26,7 @@ Use this file as the ordered build checklist and requirement coverage map.
 - [x] T0001 Align PASS flow, manual override semantics, Judge task contract, and failure model across specs.
 - [x] T0002 Rename the technical spec file and remove workflow/API drift from the docs.
 - [x] T0003 Resolve the `judge_tasks` input contract for Agent A and Agent B: canonical runtime input is structured `JudgeTask[]`, while the prompt renderer may derive human-readable bullets from those objects.
-- [x] T0004 Define `/next-topic` as a persisted API-backed capability that returns the next pending case from storage using deterministic oldest-first selection across actionable pending states.
+- [x] T0004 Define `/next-topic` as a persisted API-backed capability that returns the next pending case from storage, prioritizing fresh actionable topics before failed cases awaiting manual review and using deterministic ordering within each priority band.
 - [ ] T0005 Record any future source-of-truth doc changes in this backlog before implementation starts.
 
 ## 1. Monorepo and Developer Foundation
@@ -71,12 +71,12 @@ Use this file as the ordered build checklist and requirement coverage map.
 - [ ] T4007 Implement PASS flow gating: compose approved business summary and final business plan, enqueue D, then E, then complete.
 - [ ] T4008 Implement REJECT as a terminal flow and persist rejection rationale, rejection category, and portfolio escalation metadata.
 - [ ] T4009 Implement stagnation detection, fatal flaw handling, termination warnings, and iteration budget enforcement.
-- [ ] T4010 Implement manual review and operator override flow for `FORCE_REVISE`, `FORCE_PIVOT`, `FORCE_PASS_TO_PRD`, and `FORCE_REJECT`.
+- [ ] T4010 Implement manual review and operator override flow for `FORCE_REVISE`, `FORCE_PIVOT`, `FORCE_PASS_TO_PRD`, and `FORCE_REJECT`; when `FORCE_PASS_TO_PRD` is used, promote the latest completed iteration as the approved source iteration.
 - [ ] T4011 Implement retry policy for infra failure, timeout, malformed output, normalization failure, schema validation failure, Judge dead-end, and storage failure.
 - [ ] T4012 Prevent D/E execution unless the latest Judge decision is PASS and the current case state allows downstream generation.
 - [ ] T4013 Implement partial rerun exception rules: allow C-only reruns only for formatting-only upstream changes and allow J-only reruns only for system error recovery.
 - [ ] T4014 Detect contradictory agent outputs, invalid Judge decision schema, and low-value dead-end loops; route those cases to manual review or terminal rejection.
-- [ ] T4015 Implement workflow events for rejection escalation and `/next-topic` continuation using the persisted next-pending-case selection policy.
+- [ ] T4015 Implement workflow events for rejection escalation and `/next-topic` continuation using the persisted fresh-first next-pending-case selection policy.
 
 ## 5. Agent Runtime, Prompting, and Normalization
 - [ ] T5001 Implement a prompt renderer that combines base spec, agent role instructions, case context, prior outputs, structured Judge tasks, scoring rubric, stop conditions, and output schema.
@@ -102,11 +102,11 @@ Use this file as the ordered build checklist and requirement coverage map.
 - [ ] T6003 Implement `GET /api/cases/{caseId}` for case summary, current status, latest decision, downstream readiness, and manual-review state.
 - [ ] T6004 Implement `GET /api/cases/{caseId}/iterations` for iteration history and summaries.
 - [ ] T6005 Implement `GET /api/cases/{caseId}/outputs` for latest normalized outputs and artifact refs.
-- [ ] T6006 Implement `POST /api/cases/{caseId}/approve` for operator overrides only.
+- [ ] T6006 Implement `POST /api/cases/{caseId}/approve` for operator overrides only, including latest-iteration promotion behavior for `FORCE_PASS_TO_PRD`.
 - [ ] T6007 Implement `POST /api/cases/{caseId}/reject` for operator force-reject/manual closure only.
 - [ ] T6008 Implement `POST /api/cases/{caseId}/generate-prd` with correct downstream gating.
 - [ ] T6009 Implement `POST /api/cases/{caseId}/generate-poc` with correct downstream gating.
-- [ ] T6010 Implement `GET /api/cases/next-topic` to return the next pending persisted case using deterministic selection policy and an empty result when none exists.
+- [ ] T6010 Implement `GET /api/cases/next-topic` to return the next pending persisted case by prioritizing fresh actionable topics ahead of failed manual-review cases, using deterministic ordering within each priority band, and returning an empty result when none exists.
 - [ ] T6011 Add request validation, authentication between Telegram and API, correlation IDs, and idempotency protections.
 - [ ] T6012 Keep case create/start APIs fast and non-blocking by queuing long-running agent work and returning accepted responses quickly.
 - [ ] T6013 Expose a basic health/metrics surface for worker, queue, DB, and storage readiness.
@@ -118,7 +118,7 @@ Use this file as the ordered build checklist and requirement coverage map.
 - [ ] T7004 Implement `/approve {caseId} {action}` as an operator override command only.
 - [ ] T7005 Implement `/reject {caseId}` as an operator override/manual closure command only.
 - [ ] T7006 Implement `/prd {caseId}` and `/poc {caseId}` for downstream generation requests within allowed states.
-- [ ] T7007 Implement `/next-topic` by calling the persisted backend endpoint and returning the selected next pending case or an explicit empty-state response.
+- [ ] T7007 Implement `/next-topic` by calling the persisted backend endpoint and returning the selected next pending case, reflecting fresh-first priority behavior, or an explicit empty-state response.
 - [ ] T7008 Implement webhook or polling runner plus webhook secret validation.
 - [ ] T7009 Keep Telegram as a control plane only; do not support document editing or arbitrary shell/path input.
 - [ ] T7010 Send compact summaries for workflow start, Judge decisions, revise/pivot tasks, rejection rationale, and PRD/POC readiness.
@@ -154,7 +154,7 @@ Use this file as the ordered build checklist and requirement coverage map.
 - [ ] T11001 Add unit tests for shared schemas, state transitions, score calculations, stagnation rules, fatal flaw rules, and Judge task classification.
 - [ ] T11002 Add integration tests for repositories, storage, queue workers, prompt registry loading, and env/config validation.
 - [ ] T11003 Add end-to-end tests for baseline PASS, REVISE, PIVOT, REJECT, malformed output handling, storage failure handling, schema validation failure, and manual overrides.
-- [ ] T11004 Add Telegram-to-API integration tests for supported commands, including `/next-topic` selection and empty-state behavior.
+- [ ] T11004 Add Telegram-to-API integration tests for supported commands, including `/next-topic` priority ordering, selection, and empty-state behavior.
 - [ ] T11005 Verify that all required output sections exist for Agent A, B, C, J, business plan, PRD, and POC documents.
 - [ ] T11006 Validate that downstream documents are never generated before PASS.
 - [ ] T11007 Validate that users can query case status at any time during asynchronous execution.

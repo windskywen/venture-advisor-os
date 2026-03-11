@@ -242,7 +242,7 @@ User submits:
 - market or region
 - founder profile
 - constraints
-- preferred business shapes if any
+- preferred business models if any
 
 ### 12.2 Iteration 1
 - Agent A researches
@@ -265,6 +265,7 @@ The system retains reusable evidence, reframes opportunity strategy, then re-run
 
 ### 12.6 If PASS
 The system generates:
+- approved business summary
 - final business plan
 - PRD
 - POC specification
@@ -300,9 +301,10 @@ The case is closed and recorded as a rejected topic.
 
 ### Flow D: Generate downstream product planning docs
 1. Judge returns PASS
-2. PRDStrategist generates PRD
-3. POCArchitect generates POC plan
-4. Final case is marked complete
+2. System composes the approved business summary and final business plan from the latest approved iteration
+3. PRDStrategist generates PRD
+4. POCArchitect generates POC plan
+5. Final case is marked complete
 
 ---
 
@@ -311,7 +313,7 @@ The case is closed and recorded as a rejected topic.
 ## 14.1 Topic Intake Module
 The system must:
 - allow user to create a new opportunity case
-- accept topic, region, founder profile, business preferences, constraints
+- accept topic, region, founder profile, preferred business models, constraints
 - store metadata
 - assign default iteration budget
 - return a case ID and initial status
@@ -492,7 +494,7 @@ The system must:
 Command semantics:
 - `/approve` is an operator override command, not a required step after PASS
 - `/reject` is an operator override command for force-reject or manual closure
-- `/next-topic` retrieves the next pending case from persisted storage using the backend selection policy
+- `/next-topic` retrieves the next pending case from persisted storage using the backend selection policy, prioritizing fresh actionable topics before failed cases awaiting manual review
 
 ---
 
