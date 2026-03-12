@@ -15,6 +15,7 @@ import type {
   AgentRuntimeResponse,
 } from './agent-runtime.js';
 import { assertPocGenerationAllowed } from './downstream-gating.js';
+import { executeWithMalformedOutputRetry } from './malformed-output-retry.js';
 import { extractJsonSummary } from './normalization-utils.js';
 import { assertOutputConventions } from './output-conventions.js';
 
@@ -56,19 +57,28 @@ export async function executePocArchitect(
     priorOutputs: input.priorOutputs,
     stopConditions: input.stopConditions,
   });
-  const runtimeResponse = await input.runtime.run({
-    agentName: 'POCArchitect',
-    prompt: renderedPrompt.prompt,
-    inputPayload: renderedPrompt.inputPayload,
+  const retryResult = await executeWithMalformedOutputRetry({
+    runtime: input.runtime,
+    request: {
+      agentName: 'POCArchitect',
+      prompt: renderedPrompt.prompt,
+      inputPayload: renderedPrompt.inputPayload,
+    },
+    normalize(rawOutput) {
+      assertOutputConventions({
+        registry: input.registry,
+        agentName: 'POCArchitect',
+        rawOutput,
+      });
+      return normalizePocArchitectOutput(rawOutput);
+    },
   });
-  assertOutputConventions({
-    registry: input.registry,
-    agentName: 'POCArchitect',
-    rawOutput: runtimeResponse.rawOutput,
-  });
-  const normalizedOutput = normalizePocArchitectOutput(
-    runtimeResponse.rawOutput,
-  );
+  if (!retryResult.success) {
+    throw new Error(retryResult.validationErrors.join(' '));
+  }
+
+  const runtimeResponse = retryResult.response;
+  const normalizedOutput = retryResult.normalizedOutput;
 
   return {
     renderedPrompt,

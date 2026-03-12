@@ -145,6 +145,7 @@ describe('/startcase command', () => {
       text: 'Usage: /startcase {caseId}',
     });
   });
+
 });
 
 describe('/status command', () => {
@@ -723,6 +724,101 @@ describe('/portfolio command', () => {
   });
 });
 
+describe('/model command', () => {
+  it('returns the current runtime model configuration', async () => {
+    const handler = createTelegramCommandHandler(
+      createTelegramBotApp({
+        gatewayApi: createGatewayApiStub({
+          async getRuntimeModel() {
+            return {
+              runtimeMode: 'copilot-sdk',
+              selection: {
+                modelId: 'gpt-5-mini',
+                updatedAt: '2026-03-13T00:20:00.000Z',
+                updatedBy: 'telegram',
+              },
+              auth: {
+                isAuthenticated: true,
+                login: 'ivan',
+              },
+              availableModels: [
+                {
+                  id: 'gpt-5-mini',
+                  name: 'GPT-5 Mini',
+                  supportsReasoningEffort: true,
+                  defaultReasoningEffort: 'medium',
+                },
+              ],
+            };
+          },
+        }),
+      }),
+    );
+
+    const response = await handler.handle({
+      text: '/model',
+    });
+
+    expect(response).toEqual({
+      handled: true,
+      text: [
+        'Runtime: copilot-sdk',
+        'Selected: gpt-5-mini',
+        'Auth: ready (ivan)',
+        'Models:',
+        '- gpt-5-mini (medium)',
+        'Use /model {modelId} to switch or /model default to clear.',
+      ].join('\n'),
+    });
+  });
+
+  it('updates the current runtime model configuration', async () => {
+    const updatedRequests: Array<Record<string, unknown>> = [];
+    const handler = createTelegramCommandHandler(
+      createTelegramBotApp({
+        gatewayApi: createGatewayApiStub({
+          async updateRuntimeModel(request) {
+            updatedRequests.push(request);
+            return {
+              runtimeMode: 'copilot-sdk',
+              selection: {
+                modelId: 'gpt-5',
+                updatedAt: '2026-03-13T00:25:00.000Z',
+                updatedBy: 'telegram',
+              },
+              auth: {
+                isAuthenticated: true,
+              },
+              availableModels: [],
+            };
+          },
+        }),
+      }),
+    );
+
+    const response = await handler.handle({
+      text: '/model gpt-5',
+    });
+
+    expect(updatedRequests).toEqual([
+      {
+        modelId: 'gpt-5',
+        updatedBy: 'telegram',
+      },
+    ]);
+    expect(response).toEqual({
+      handled: true,
+      text: [
+        'Runtime: copilot-sdk',
+        'Selected: gpt-5',
+        'Auth: ready',
+        'Models: unavailable',
+        'Use /model {modelId} to switch or /model default to clear.',
+      ].join('\n'),
+    });
+  });
+});
+
 function createGatewayApiStub(
   overrides: Partial<TelegramBotGatewayApi> = {},
 ): TelegramBotGatewayApi {
@@ -756,6 +852,12 @@ function createGatewayApiStub(
     },
     async getPortfolio() {
       throw new Error('getPortfolio should not be called in this test');
+    },
+    async getRuntimeModel() {
+      throw new Error('getRuntimeModel should not be called in this test');
+    },
+    async updateRuntimeModel() {
+      throw new Error('updateRuntimeModel should not be called in this test');
     },
     ...overrides,
   };

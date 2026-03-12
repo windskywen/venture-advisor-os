@@ -4,12 +4,15 @@ import type {
   CaseActionResponseDto,
   CreateCaseRequestDto,
   CreateCaseResponseDto,
+  GetRuntimeModelResponseDto,
   GetCaseOutputsResponseDto,
   NextTopicResponseDto,
   PortfolioOverviewDto,
   StartCaseResponseDto,
+  UpdateRuntimeModelRequestDto,
 } from '@venture-advisor-os/shared-types';
 
+import { TelegramBotCommandError } from '../app/index.js';
 import type { TelegramBotGatewayApi } from '../app/index.js';
 
 export const TELEGRAM_GATEWAY_API_ADAPTER =
@@ -35,7 +38,8 @@ export function createTelegramGatewayApiClient(
       });
 
       if (!response.ok) {
-        throw new Error(
+        throw await buildGatewayApiError(
+          response,
           `Gateway API create case request failed with status ${response.status}.`,
         );
       }
@@ -55,7 +59,8 @@ export function createTelegramGatewayApiClient(
       );
 
       if (!response.ok) {
-        throw new Error(
+        throw await buildGatewayApiError(
+          response,
           `Gateway API start case request failed with status ${response.status}.`,
         );
       }
@@ -72,7 +77,8 @@ export function createTelegramGatewayApiClient(
       );
 
       if (!response.ok) {
-        throw new Error(
+        throw await buildGatewayApiError(
+          response,
           `Gateway API get case request failed with status ${response.status}.`,
         );
       }
@@ -92,7 +98,8 @@ export function createTelegramGatewayApiClient(
       );
 
       if (!response.ok) {
-        throw new Error(
+        throw await buildGatewayApiError(
+          response,
           `Gateway API get case outputs request failed with status ${response.status}.`,
         );
       }
@@ -118,7 +125,8 @@ export function createTelegramGatewayApiClient(
       );
 
       if (!response.ok) {
-        throw new Error(
+        throw await buildGatewayApiError(
+          response,
           `Gateway API approve case request failed with status ${response.status}.`,
         );
       }
@@ -139,7 +147,8 @@ export function createTelegramGatewayApiClient(
       );
 
       if (!response.ok) {
-        throw new Error(
+        throw await buildGatewayApiError(
+          response,
           `Gateway API reject case request failed with status ${response.status}.`,
         );
       }
@@ -160,7 +169,8 @@ export function createTelegramGatewayApiClient(
       );
 
       if (!response.ok) {
-        throw new Error(
+        throw await buildGatewayApiError(
+          response,
           `Gateway API generate PRD request failed with status ${response.status}.`,
         );
       }
@@ -181,7 +191,8 @@ export function createTelegramGatewayApiClient(
       );
 
       if (!response.ok) {
-        throw new Error(
+        throw await buildGatewayApiError(
+          response,
           `Gateway API generate POC request failed with status ${response.status}.`,
         );
       }
@@ -198,12 +209,52 @@ export function createTelegramGatewayApiClient(
       );
 
       if (!response.ok) {
-        throw new Error(
+        throw await buildGatewayApiError(
+          response,
           `Gateway API next-topic request failed with status ${response.status}.`,
         );
       }
 
       return (await response.json()) as NextTopicResponseDto;
+    },
+    async getRuntimeModel(): Promise<GetRuntimeModelResponseDto> {
+      const response = await fetchImpl(
+        buildUrl(options.baseUrl, '/api/runtime/model'),
+        {
+          method: 'GET',
+          headers: buildHeaders(options.authToken),
+        },
+      );
+
+      if (!response.ok) {
+        throw await buildGatewayApiError(
+          response,
+          `Gateway API runtime model request failed with status ${response.status}.`,
+        );
+      }
+
+      return (await response.json()) as GetRuntimeModelResponseDto;
+    },
+    async updateRuntimeModel(
+      request: UpdateRuntimeModelRequestDto,
+    ): Promise<GetRuntimeModelResponseDto> {
+      const response = await fetchImpl(
+        buildUrl(options.baseUrl, '/api/runtime/model'),
+        {
+          method: 'PUT',
+          headers: buildHeaders(options.authToken),
+          body: JSON.stringify(request),
+        },
+      );
+
+      if (!response.ok) {
+        throw await buildGatewayApiError(
+          response,
+          `Gateway API runtime model update failed with status ${response.status}.`,
+        );
+      }
+
+      return (await response.json()) as GetRuntimeModelResponseDto;
     },
     async getPortfolio(limit?: number): Promise<PortfolioOverviewDto> {
       const query = limit === undefined ? '' : `?limit=${encodeURIComponent(String(limit))}`;
@@ -216,7 +267,8 @@ export function createTelegramGatewayApiClient(
       );
 
       if (!response.ok) {
-        throw new Error(
+        throw await buildGatewayApiError(
+          response,
           `Gateway API portfolio request failed with status ${response.status}.`,
         );
       }
@@ -235,4 +287,44 @@ function buildHeaders(authToken?: string): Record<string, string> {
     ...(authToken ? { authorization: `Bearer ${authToken}` } : {}),
     'content-type': 'application/json; charset=utf-8',
   };
+}
+
+async function buildGatewayApiError(
+  response: Response,
+  fallbackMessage: string,
+): Promise<TelegramBotCommandError> {
+  if (response.status >= 500) {
+    return new TelegramBotCommandError(
+      'Gateway API is currently unavailable. Please try again.',
+    );
+  }
+
+  let message = fallbackMessage;
+
+  try {
+    const contentType = response.headers.get('content-type') ?? '';
+    if (contentType.includes('application/json')) {
+      const payload = (await response.json()) as {
+        message?: unknown;
+        error?: unknown;
+      };
+      if (typeof payload.message === 'string' && payload.message.trim().length > 0) {
+        message = payload.message;
+      } else if (
+        typeof payload.error === 'string' &&
+        payload.error.trim().length > 0
+      ) {
+        message = payload.error;
+      }
+    } else {
+      const text = (await response.text()).trim();
+      if (text.length > 0) {
+        message = text;
+      }
+    }
+  } catch {
+    message = fallbackMessage;
+  }
+
+  return new TelegramBotCommandError(message);
 }

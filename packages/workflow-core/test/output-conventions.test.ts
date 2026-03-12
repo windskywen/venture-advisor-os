@@ -70,7 +70,7 @@ Facts, inferences, and assumptions are explicitly separated.
     });
   });
 
-  it('rejects missing citations, labels, and score-range violations', () => {
+  it('rejects missing labels and score-range violations for synthesis agents', () => {
     const markdown = `
 ## VC Summary
 Evidence exists.
@@ -117,13 +117,68 @@ Revise
 
     expect(result.valid).toBe(false);
     expect(result.errors).toContain(
-      'Citation markers are required for factual claims.',
-    );
-    expect(result.errors).toContain(
       'Output must explicitly distinguish facts, inferences/hypotheses, and assumptions.',
     );
     expect(result.errors).toContain(
       'Score at json.score_breakdown[0].score must be between 1 and 10.',
+    );
+  });
+
+  it('still requires citations for Judge outputs', () => {
+    const markdown = [
+      '## Decision',
+      'REVISE',
+      '## Decision Rationale',
+      'Facts: weak evidence remains.',
+      '## Accepted Objections',
+      'Weak evidence',
+      '## Rejected Objections',
+      'None',
+      '## Evidence Assessment',
+      'Completeness: 5',
+      '## Iteration Worthiness',
+      'Continue',
+      '## Next Tasks',
+      'Refresh evidence',
+      '## Termination Warning',
+      'False',
+    ].join('\n\n');
+
+    const result = validateOutputConventions({
+      registry,
+      agentName: 'Judge',
+      markdown,
+      rawOutput: `\`\`\`json
+{
+  "decision": "REVISE",
+  "rationale": "More evidence is needed.",
+  "accepted_objections": ["Weak evidence"],
+  "rejected_objections": [],
+  "evidence_assessment": {
+    "completeness": 5,
+    "freshness": 6,
+    "confidence": 5
+  },
+  "iteration_worthiness": {
+    "should_continue": true,
+    "reason": "More work can resolve uncertainty."
+  },
+  "next_iteration_tasks": [
+    {
+      "target_agent": "FACT_RESEARCHER",
+      "task_type": "EVIDENCE_REFRESH",
+      "description": "Refresh evidence.",
+      "blocking": true
+    }
+  ],
+  "termination_warning": false
+}
+\`\`\``,
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors).toContain(
+      'Citation markers are required for factual claims.',
     );
   });
 

@@ -4,7 +4,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { listenOnSafePort } from '../../../tests/support/http-server.js';
 
-import { createTelegramGatewayApiClient } from '../src/index.js';
+import {
+  TelegramBotCommandError,
+  createTelegramGatewayApiClient,
+} from '../src/index.js';
 
 describe('telegram gateway api client', () => {
   const servers: ReturnType<typeof createServer>[] = [];
@@ -625,6 +628,107 @@ describe('telegram gateway api client', () => {
         authorization: 'Bearer shared-secret',
         contentType: 'application/json; charset=utf-8',
         body: '',
+      },
+    ]);
+  });
+
+  it('translates gateway app errors into user-facing command errors', async () => {
+    const server = createServer((_request, response) => {
+      response.statusCode = 409;
+      response.setHeader('content-type', 'application/json; charset=utf-8');
+      response.end(
+        JSON.stringify({
+          error: 'APP_ERROR',
+          message: 'Case case-123 cannot be started from status APPROVED_FOR_PRD.',
+        }),
+      );
+    });
+    servers.push(server);
+    const baseUrl = await listenOnSafePort(server);
+
+    const client = createTelegramGatewayApiClient({
+      baseUrl,
+      authToken: 'shared-secret',
+    });
+
+    await expect(client.startCase('case-123')).rejects.toBeInstanceOf(
+      TelegramBotCommandError,
+    );
+    await expect(client.startCase('case-123')).rejects.toMatchObject({
+      message: 'Case case-123 cannot be started from status APPROVED_FOR_PRD.',
+    });
+  });
+
+  it('gets and updates the runtime model selection through the gateway API', async () => {
+    const observedRequests: Array<Record<string, unknown>> = [];
+    const server = createServer(async (request, response) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      }
+
+      observedRequests.push({
+        method: request.method,
+        url: request.url,
+        authorization: request.headers.authorization,
+        body: Buffer.concat(chunks).toString('utf8'),
+      });
+
+      response.statusCode = 200;
+      response.setHeader('content-type', 'application/json; charset=utf-8');
+      response.end(
+        JSON.stringify({
+          runtimeMode: 'copilot-sdk',
+          selection: {
+            modelId: 'gpt-5-mini',
+            updatedAt: '2026-03-13T00:20:00.000Z',
+            updatedBy: 'telegram',
+          },
+          auth: {
+            isAuthenticated: true,
+          },
+          availableModels: [
+            {
+              id: 'gpt-5-mini',
+              name: 'GPT-5 Mini',
+              supportsReasoningEffort: true,
+              defaultReasoningEffort: 'medium',
+            },
+          ],
+        }),
+      );
+    });
+    servers.push(server);
+    const baseUrl = await listenOnSafePort(server);
+
+    const client = createTelegramGatewayApiClient({
+      baseUrl,
+      authToken: 'shared-secret',
+    });
+
+    const getResponse = await client.getRuntimeModel();
+    const updateResponse = await client.updateRuntimeModel({
+      modelId: 'gpt-5-mini',
+      updatedBy: 'telegram',
+    });
+
+    expect(getResponse.selection.modelId).toBe('gpt-5-mini');
+    expect(updateResponse.selection.modelId).toBe('gpt-5-mini');
+    expect(observedRequests).toEqual([
+      {
+        method: 'GET',
+        url: '/api/runtime/model',
+        authorization: 'Bearer shared-secret',
+        body: '',
+      },
+      {
+        method: 'PUT',
+        url: '/api/runtime/model',
+        authorization: 'Bearer shared-secret',
+        body: JSON.stringify({
+          modelId: 'gpt-5-mini',
+          updatedBy: 'telegram',
+        }),
       },
     ]);
   });

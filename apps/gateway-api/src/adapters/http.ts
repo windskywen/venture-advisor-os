@@ -249,6 +249,25 @@ async function routeRequest(
     };
   }
 
+  if (request.method === 'GET' && request.url === '/api/runtime/model') {
+    const result = await app.getRuntimeModel();
+    return {
+      statusCode: 200,
+      payload: result,
+    };
+  }
+
+  if (request.method === 'PUT' && request.url === '/api/runtime/model') {
+    const body = await readJsonBody(request);
+    const result = await app.updateRuntimeModel(
+      body as import('@venture-advisor-os/shared-types').UpdateRuntimeModelRequestDto,
+    );
+    return {
+      statusCode: 200,
+      payload: result,
+    };
+  }
+
   if (request.method === 'GET' && parsedUrl?.pathname === '/api/cases/portfolio') {
     const limitParam = parsedUrl.searchParams.get('limit');
     const result = await app.getPortfolio(

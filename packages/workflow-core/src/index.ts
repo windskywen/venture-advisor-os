@@ -1,4 +1,5 @@
 export const WORKFLOW_CORE_PACKAGE = '@venture-advisor-os/workflow-core';
+export * from './copilot-sdk-runtime.js';
 export * from './first-iteration.js';
 export * from './fact-researcher.js';
 export * from './opportunity-strategist.js';

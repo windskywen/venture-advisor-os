@@ -15,6 +15,7 @@ import type {
   AgentRuntimeResponse,
 } from './agent-runtime.js';
 import { assertPrdGenerationAllowed } from './downstream-gating.js';
+import { executeWithMalformedOutputRetry } from './malformed-output-retry.js';
 import { extractJsonSummary } from './normalization-utils.js';
 import { assertOutputConventions } from './output-conventions.js';
 
@@ -54,19 +55,28 @@ export async function executePrdStrategist(
     priorOutputs: input.priorOutputs,
     stopConditions: input.stopConditions,
   });
-  const runtimeResponse = await input.runtime.run({
-    agentName: 'PRDStrategist',
-    prompt: renderedPrompt.prompt,
-    inputPayload: renderedPrompt.inputPayload,
+  const retryResult = await executeWithMalformedOutputRetry({
+    runtime: input.runtime,
+    request: {
+      agentName: 'PRDStrategist',
+      prompt: renderedPrompt.prompt,
+      inputPayload: renderedPrompt.inputPayload,
+    },
+    normalize(rawOutput) {
+      assertOutputConventions({
+        registry: input.registry,
+        agentName: 'PRDStrategist',
+        rawOutput,
+      });
+      return normalizePrdStrategistOutput(rawOutput);
+    },
   });
-  assertOutputConventions({
-    registry: input.registry,
-    agentName: 'PRDStrategist',
-    rawOutput: runtimeResponse.rawOutput,
-  });
-  const normalizedOutput = normalizePrdStrategistOutput(
-    runtimeResponse.rawOutput,
-  );
+  if (!retryResult.success) {
+    throw new Error(retryResult.validationErrors.join(' '));
+  }
+
+  const runtimeResponse = retryResult.response;
+  const normalizedOutput = retryResult.normalizedOutput;
 
   return {
     renderedPrompt,

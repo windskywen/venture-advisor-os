@@ -123,6 +123,12 @@ function createGatewayApiStub(
     async getPortfolio() {
       throw new Error('getPortfolio should not be called in this test');
     },
+    async getRuntimeModel() {
+      throw new Error('getRuntimeModel should not be called in this test');
+    },
+    async updateRuntimeModel() {
+      throw new Error('updateRuntimeModel should not be called in this test');
+    },
     ...overrides,
   };
 }

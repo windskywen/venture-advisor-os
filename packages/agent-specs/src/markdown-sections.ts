@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 const MARKDOWN_HEADING_PATTERN = /^#{1,6}\s+(.+?)\s*$/gmu;
+const STANDALONE_SECTION_LINE_PATTERN =
+  /^(?![#>\-*\d`])([A-Z][A-Za-z0-9/&(),:'" -]{2,100})\s*:?\s*$/gmu;
 
 export interface MarkdownSectionValidationResult {
   headings: string[];
@@ -9,12 +11,24 @@ export interface MarkdownSectionValidationResult {
 
 export function extractMarkdownSectionHeadings(markdown: string): string[] {
   const headings: string[] = [];
+  const seen = new Set<string>();
 
   for (const match of markdown.matchAll(MARKDOWN_HEADING_PATTERN)) {
     const heading = match[1]?.trim();
-    if (heading) {
+    if (heading && !seen.has(heading)) {
+      seen.add(heading);
       headings.push(heading);
     }
+  }
+
+  for (const match of markdown.matchAll(STANDALONE_SECTION_LINE_PATTERN)) {
+    const heading = match[1]?.trim();
+    if (!heading || seen.has(heading) || heading.endsWith('.')) {
+      continue;
+    }
+
+    seen.add(heading);
+    headings.push(heading);
   }
 
   return headings;
@@ -25,9 +39,11 @@ export function validateRequiredMarkdownSections(
   requiredSections: readonly string[],
 ): MarkdownSectionValidationResult {
   const headings = extractMarkdownSectionHeadings(markdown);
-  const normalizedHeadings = new Set(headings.map(normalizeSectionName));
   const missingSections = requiredSections.filter(
-    (sectionName) => !normalizedHeadings.has(normalizeSectionName(sectionName)),
+    (sectionName) =>
+      !headings.some((heading) =>
+        matchesRequiredSection(sectionName, heading),
+      ),
   );
 
   return {
@@ -60,5 +76,24 @@ export function createRequiredMarkdownSectionsSchema(
 }
 
 function normalizeSectionName(sectionName: string): string {
-  return sectionName.trim().toLowerCase();
+  return sectionName
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/gu, ' ')
+    .replace(/\s*\([^)]*\)\s*$/u, '')
+    .replace(/\s*[-:]\s.*$/u, '')
+    .trim();
+}
+
+function matchesRequiredSection(
+  requiredSection: string,
+  actualHeading: string,
+): boolean {
+  const normalizedRequired = normalizeSectionName(requiredSection);
+  const normalizedActual = normalizeSectionName(actualHeading);
+
+  return (
+    normalizedActual === normalizedRequired ||
+    normalizedActual.startsWith(`${normalizedRequired} `)
+  );
 }

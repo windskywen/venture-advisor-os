@@ -5,6 +5,7 @@ import {
   type EnvironmentLike,
   type WorkflowConfig,
 } from './config.js';
+import { AgentRuntimeModeSchema } from './schemas.js';
 
 const REQUIRED_ENV_VALUE_SCHEMA = z.string().trim().min(1);
 const NON_PLACEHOLDER_SECRET_SCHEMA = REQUIRED_ENV_VALUE_SCHEMA.refine(
@@ -26,10 +27,19 @@ const CommonRuntimeEnvironmentSchema = z.object({
   storageRoot: REQUIRED_ENV_VALUE_SCHEMA,
 });
 
-const GatewayApiRuntimeEnvironmentSchema = CommonRuntimeEnvironmentSchema.extend({
-  apiPort: z.number().int().positive(),
-  workflowConfig: z.custom<WorkflowConfig>(),
+const CopilotRuntimeEnvironmentSchema = z.object({
+  agentRuntimeMode: AgentRuntimeModeSchema,
+  copilotCliPath: REQUIRED_ENV_VALUE_SCHEMA.optional(),
+  githubToken: NON_PLACEHOLDER_SECRET_SCHEMA.optional(),
+  useLoggedInUser: z.boolean(),
 });
+
+const GatewayApiRuntimeEnvironmentSchema = CommonRuntimeEnvironmentSchema.extend(
+  {
+    apiPort: z.number().int().positive(),
+    workflowConfig: z.custom<WorkflowConfig>(),
+  },
+).merge(CopilotRuntimeEnvironmentSchema);
 
 const TelegramBotRuntimeEnvironmentSchema = z.object({
   telegramBotToken: NON_PLACEHOLDER_SECRET_SCHEMA,
@@ -37,12 +47,8 @@ const TelegramBotRuntimeEnvironmentSchema = z.object({
 });
 
 const WorkerRuntimeEnvironmentSchema = CommonRuntimeEnvironmentSchema.extend({
-  copilotRuntimePath: REQUIRED_ENV_VALUE_SCHEMA.refine(
-    (value) => value.toLowerCase() !== 'replace-me',
-    'must be set to a non-placeholder value',
-  ),
   workflowConfig: z.custom<WorkflowConfig>(),
-});
+}).merge(CopilotRuntimeEnvironmentSchema);
 
 export type CommonRuntimeEnvironment = z.infer<
   typeof CommonRuntimeEnvironmentSchema
@@ -72,6 +78,7 @@ export function loadGatewayApiRuntimeEnvironment(
 ): GatewayApiRuntimeEnvironment {
   return GatewayApiRuntimeEnvironmentSchema.parse({
     ...loadCommonRuntimeEnvironment(env),
+    ...loadCopilotRuntimeEnvironment(env),
     apiPort: readPositiveIntegerEnv(env, 'API_PORT'),
     workflowConfig: loadWorkflowConfig(env),
   });
@@ -94,8 +101,30 @@ export function loadWorkerRuntimeEnvironment(
 ): WorkerRuntimeEnvironment {
   return WorkerRuntimeEnvironmentSchema.parse({
     ...loadCommonRuntimeEnvironment(env),
-    copilotRuntimePath: readRequiredStringEnv(env, 'COPILOT_RUNTIME_PATH'),
+    ...loadCopilotRuntimeEnvironment(env),
     workflowConfig: loadWorkflowConfig(env),
+  });
+}
+
+function loadCopilotRuntimeEnvironment(
+  env: EnvironmentLike,
+): z.infer<typeof CopilotRuntimeEnvironmentSchema> {
+  const githubToken = readOptionalSecretEnv(env, 'GITHUB_TOKEN');
+
+  return CopilotRuntimeEnvironmentSchema.parse({
+    agentRuntimeMode: readEnumEnv(
+      env,
+      'COPILOT_RUNTIME_MODE',
+      AgentRuntimeModeSchema.options,
+      'deterministic-local-runtime',
+    ),
+    copilotCliPath: readOptionalStringEnv(env, 'COPILOT_CLI_PATH'),
+    githubToken,
+    useLoggedInUser: readBooleanEnv(
+      env,
+      'COPILOT_USE_LOGGED_IN_USER',
+      githubToken === undefined,
+    ),
   });
 }
 
@@ -113,6 +142,31 @@ function readRequiredSecretEnv(
   return NON_PLACEHOLDER_SECRET_SCHEMA.parse(env[name]);
 }
 
+function readOptionalSecretEnv(
+  env: EnvironmentLike,
+  name: string,
+): string | undefined {
+  const value = env[name];
+  if (value === undefined || value.trim().length === 0) {
+    return undefined;
+  }
+
+  return NON_PLACEHOLDER_SECRET_SCHEMA.parse(value);
+}
+
+function readOptionalStringEnv(
+  env: EnvironmentLike,
+  name: string,
+): string | undefined {
+  const value = env[name];
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const normalizedValue = value.trim();
+  return normalizedValue.length > 0 ? normalizedValue : undefined;
+}
+
 function readRequiredUrlEnv(env: EnvironmentLike, name: string): string {
   const value = readRequiredStringEnv(env, name);
   return URL_ENV_VALUE_SCHEMA.parse(value);
@@ -124,6 +178,44 @@ function readPositiveIntegerEnv(
 ): number {
   const value = POSITIVE_INTEGER_STRING_SCHEMA.parse(env[name]);
   return Number.parseInt(value, 10);
+}
+
+function readBooleanEnv(
+  env: EnvironmentLike,
+  name: string,
+  defaultValue: boolean,
+): boolean {
+  const value = readOptionalStringEnv(env, name);
+  if (value === undefined) {
+    return defaultValue;
+  }
+
+  const normalizedValue = value.toLowerCase();
+  if (normalizedValue === 'true') {
+    return true;
+  }
+
+  if (normalizedValue === 'false') {
+    return false;
+  }
+
+  return defaultValue;
+}
+
+function readEnumEnv<const Values extends readonly string[]>(
+  env: EnvironmentLike,
+  name: string,
+  supportedValues: Values,
+  defaultValue: Values[number],
+): Values[number] {
+  const value = readOptionalStringEnv(env, name);
+  if (value === undefined) {
+    return defaultValue;
+  }
+
+  return supportedValues.includes(value as Values[number])
+    ? (value as Values[number])
+    : defaultValue;
 }
 
 function getDefaultEnvironment(): EnvironmentLike {

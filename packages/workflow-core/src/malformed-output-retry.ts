@@ -5,7 +5,7 @@ import type {
 } from './agent-runtime.js';
 
 const STRICT_FORMATTING_REMINDER =
-  'STRICT FORMATTING REMINDER: Return only the required markdown sections and JSON summary in the exact schema shape.';
+  'STRICT FORMATTING REMINDER: Return only the required markdown sections and JSON summary in the exact schema shape. Do not add extra prose before or after the required sections. Preserve citation markers for factual claims.';
 
 export interface MalformedOutputRetryInput<TNormalizedOutput> {
   runtime: AgentRuntimeAdapter;
@@ -64,7 +64,7 @@ export async function executeWithMalformedOutputRetry<TNormalizedOutput>(
 
       request = {
         ...request,
-        prompt: `${request.prompt}\n\n${STRICT_FORMATTING_REMINDER}`,
+        prompt: `${request.prompt}\n\n${STRICT_FORMATTING_REMINDER}\nPrevious validation errors:\n- ${message}`,
       };
     }
   }

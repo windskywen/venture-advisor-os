@@ -12,6 +12,7 @@ import type {
   AgentRuntimeAdapter,
   AgentRuntimeResponse,
 } from './agent-runtime.js';
+import { executeWithMalformedOutputRetry } from './malformed-output-retry.js';
 import { extractJsonSummary } from './normalization-utils.js';
 import { assertOutputConventions } from './output-conventions.js';
 
@@ -43,17 +44,28 @@ export async function executeVcCritic(
     priorOutputs: input.priorOutputs,
     stopConditions: input.stopConditions,
   });
-  const runtimeResponse = await input.runtime.run({
-    agentName: 'VCCritic',
-    prompt: renderedPrompt.prompt,
-    inputPayload: renderedPrompt.inputPayload,
+  const retryResult = await executeWithMalformedOutputRetry({
+    runtime: input.runtime,
+    request: {
+      agentName: 'VCCritic',
+      prompt: renderedPrompt.prompt,
+      inputPayload: renderedPrompt.inputPayload,
+    },
+    normalize(rawOutput) {
+      assertOutputConventions({
+        registry: input.registry,
+        agentName: 'VCCritic',
+        rawOutput,
+      });
+      return normalizeVcCriticOutput(rawOutput);
+    },
   });
-  assertOutputConventions({
-    registry: input.registry,
-    agentName: 'VCCritic',
-    rawOutput: runtimeResponse.rawOutput,
-  });
-  const normalizedOutput = normalizeVcCriticOutput(runtimeResponse.rawOutput);
+  if (!retryResult.success) {
+    throw new Error(retryResult.validationErrors.join(' '));
+  }
+
+  const runtimeResponse = retryResult.response;
+  const normalizedOutput = retryResult.normalizedOutput;
 
   return {
     renderedPrompt,

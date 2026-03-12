@@ -6,10 +6,12 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "dependencies": {
+    "@venture-advisor-os/agent-specs": "0.1.0",
     "@venture-advisor-os/persistence": "0.1.0",
     "@venture-advisor-os/report-renderer": "0.1.0",
     "@venture-advisor-os/shared-types": "0.1.0",
-    "@venture-advisor-os/workflow-core": "0.1.0"
+    "@venture-advisor-os/workflow-core": "0.1.0",
+    "cheerio": "^1.2.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

@@ -1,47 +1,43 @@
 # Venture Advisor OS
 
-Venture Advisor OS evaluates founder-submitted opportunities through a gated multi-agent workflow and only produces downstream delivery artifacts after a validated PASS decision.
+Venture Advisor OS is a Telegram-controlled, multi-agent startup opportunity evaluation system. A user submits an idea, the system runs a gated research and review workflow, and only ideas that survive Judge review move on to downstream deliverables such as an approved business summary, a business plan, a PRD, and a POC specification.
 
-## Current Status
+The runtime is local-first:
 
-The repository now contains the monorepo skeleton, shared tooling, local developer bootstrap, and the source-of-truth product and orchestration specs under `docs/`.
-Application services are still placeholders until the remaining tasks in `docs/task.md` are implemented.
+- `apps/telegram-bot` handles Telegram webhook intake and command responses.
+- `apps/gateway-api` exposes the case lifecycle HTTP API and runtime model controls.
+- `apps/worker` runs the asynchronous workflow, agent execution, routing, validation, and artifact generation.
+- PostgreSQL stores case state and history.
+- Redis backs BullMQ workflow queues.
+- `storage/` holds generated artifacts per case.
 
-## Architecture Overview
+## What The System Does
 
-The intended runtime architecture is:
+For each case, the standard path is:
 
-1. `apps/telegram-bot` receives operator commands and acts as the control-plane interface.
-2. `apps/gateway-api` exposes the case lifecycle API used by Telegram and future internal tooling.
-3. `apps/worker` runs orchestration, queue consumers, agent execution, normalization, and downstream generation.
-4. `packages/shared-types` holds shared enums, DTOs, schemas, and cross-service contracts.
-5. `packages/workflow-core` holds routing rules, iteration logic, and orchestration behavior.
-6. `packages/persistence` owns database access and artifact storage adapters.
-7. `packages/report-renderer` owns approved business summary, business plan, PRD, and POC rendering.
-8. `packages/agent-specs` exposes the versioned prompt/spec registry loaded from `docs/agent-specs`.
+1. `FactResearcher` gathers evidence, pain points, workflow gaps, and competitor context.
+2. `OpportunityStrategist` turns the evidence into concrete software opportunities and recommends an entry point.
+3. `VCCritic` stress-tests the idea from a venture perspective.
+4. `Judge` decides `PASS`, `REVISE`, `PIVOT`, or `REJECT`.
+5. If the case reaches `PASS`, downstream agents can produce a PRD and POC build plan.
 
-Supporting infrastructure:
-
-- PostgreSQL stores case state, iterations, scores, approvals, and audit logs.
-- Redis backs queueing and workflow coordination.
-- The local filesystem storage root holds per-case artifacts under `storage/cases/{caseId}/...`.
-- The source documents in `docs/` remain the contract for implementation decisions.
+The workflow is intentionally gated. PRD and POC generation are blocked unless the latest Judge decision is `PASS`.
 
 ## Repository Layout
 
 ```text
 apps/
-  gateway-api/
-  telegram-bot/
-  worker/
+  gateway-api/      HTTP API and health/metrics endpoints
+  telegram-bot/     Telegram webhook server and command handling
+  worker/           BullMQ processors, orchestration, runtime integration
 packages/
-  agent-specs/
-  persistence/
-  report-renderer/
-  shared-types/
-  workflow-core/
+  agent-specs/      Prompt registry and prompt renderer
+  persistence/      PostgreSQL repositories and storage adapters
+  report-renderer/  Markdown and JSON artifact rendering
+  shared-types/     Shared schemas, DTOs, env loading, enums
+  workflow-core/    Agent execution, routing, retries, queue planning
 docs/
-  agent-specs/
+  agent-specs/      Source-of-truth prompt YAML files
   orchestrator-rules.md
   prd.md
   task.md
@@ -49,42 +45,152 @@ docs/
 scripts/
   bootstrap-dev.mjs
   check-env.mjs
+  postinstall.mjs
   seed-dev.mjs
+  setup-dev.mjs
 compose.yaml
 ```
 
-## Local Commands
+## Prerequisites
 
-Bootstrap the repo:
+- Node.js `>=24`
+- npm `>=11`
+- Docker Desktop or another Docker runtime for local PostgreSQL and Redis
+- A Telegram bot token if you want to use Telegram
+- GitHub Copilot authentication if you want live model-backed execution with `copilot-sdk`
+
+## Quick Start
+
+1. Install dependencies:
 
 ```bash
 npm install
+```
+
+2. Copy `.env.example` to `.env` and update the values you need.
+
+3. Run the full local bootstrap:
+
+```bash
 npm run setup:dev
 ```
 
-`npm run setup:dev` backfills any missing keys in `.env`, creates the storage directories, starts PostgreSQL and Redis, waits for them to become reachable, runs DB migrations, and seeds sample storage data.
+`npm run setup:dev` will:
 
-If you only want the filesystem/bootstrap step without starting infrastructure:
+- backfill missing `.env` keys
+- create storage directories
+- start PostgreSQL and Redis with Docker
+- wait for those services to become healthy
+- create the `ventrueadvisor` database if needed
+- run database migrations
+- seed local development data
+
+4. Build the workspace:
 
 ```bash
-npm run bootstrap:dev
+npm run build
 ```
 
-## Environment and Secrets
+5. Start the application services in separate terminals:
 
-Copy `.env.example` to `.env` and replace the placeholder values before starting any service.
+```bash
+npm run start:gateway
+npm run start:worker
+npm run start:telegram
+```
 
-- `DATABASE_URL`: PostgreSQL connection string for the `ventrueadvisor` database.
-- `REDIS_URL`: Redis connection string used for queueing and coordination.
-- `STORAGE_ROOT`: local artifact root for `storage/cases/{caseId}/...`.
-- `TELEGRAM_BOT_TOKEN`: Telegram bot token for the control-plane bot.
-- `TELEGRAM_WEBHOOK_SECRET`: shared secret expected on Telegram webhook requests.
-- `COPILOT_RUNTIME_PATH`: absolute filesystem path to the local Copilot/Codex runtime used by the worker.
-- `AGENT_TIMEOUT_MS`, `REPORT_RENDER_TIMEOUT_MS`, `PRD_GENERATION_TIMEOUT_MS`, `POC_GENERATION_TIMEOUT_MS`: positive timeout thresholds used by workflow execution and downstream generation.
+If you prefer build-and-run wrappers:
 
-Run `npm run env:check` before startup to validate required secrets, URLs, paths, and timeout values.
+```bash
+npm run run:gateway
+npm run run:worker
+npm run run:telegram
+```
 
-For partial local setup, validate only the scopes you need:
+6. Verify the gateway is healthy:
+
+```bash
+curl http://localhost:3000/health
+curl http://localhost:3000/metrics
+```
+
+## Environment Variables
+
+The repo is configured to use the PostgreSQL database named `ventrueadvisor`.
+
+Core runtime:
+
+- `DATABASE_URL`
+  PostgreSQL connection string. Default example: `postgres://postgres:postgres@localhost:5432/ventrueadvisor`
+- `REDIS_URL`
+  Redis connection string
+- `STORAGE_ROOT`
+  Artifact output root. Default example: `./storage`
+- `API_PORT`
+  Gateway HTTP port. Default: `3000`
+
+Telegram:
+
+- `TELEGRAM_BOT_TOKEN`
+  Bot token from `@BotFather`
+- `TELEGRAM_WEBHOOK_SECRET`
+  Shared secret checked on incoming webhook requests
+- `TELEGRAM_WEBHOOK_PORT`
+  Local Telegram webhook server port. Default: `3001`
+- `TELEGRAM_WEBHOOK_PATH`
+  Default: `/telegram/webhook`
+- `TELEGRAM_OPERATOR_USER_IDS`
+  Optional comma-separated Telegram user IDs allowed to use operator-only commands
+- `GATEWAY_API_BASE_URL`
+  Telegram bot -> gateway base URL, usually `http://localhost:3000`
+- `GATEWAY_API_AUTH_TOKEN`
+  Optional auth token for gateway requests
+
+Worker runtime:
+
+- `COPILOT_RUNTIME_MODE`
+  `deterministic-local-runtime` or `copilot-sdk`
+- `COPILOT_CLI_PATH`
+  Optional explicit path to the Copilot CLI
+- `COPILOT_USE_LOGGED_IN_USER`
+  `true` to use the logged-in local Copilot identity
+- `GITHUB_TOKEN`
+  Optional token-based auth for the Copilot SDK
+- `AGENT_TIMEOUT_MS`
+- `REPORT_RENDER_TIMEOUT_MS`
+- `PRD_GENERATION_TIMEOUT_MS`
+- `POC_GENERATION_TIMEOUT_MS`
+
+Workflow tuning:
+
+- `JUDGE_VC_PASS_THRESHOLD`
+- `JUDGE_EVIDENCE_PASS_THRESHOLD`
+- `MIN_SCORE_IMPROVEMENT`
+- `DEFAULT_MAX_ITERATIONS`
+- `COMPLEX_TOPIC_MAX_ITERATIONS`
+- `MAX_STAGNANT_ITERATIONS`
+- `DEFAULT_RESEARCH_STYLE`
+- `BROWSING_AUTONOMY_PROFILE`
+- `BROWSING_ALLOW_ADJACENT_EXPLORATION`
+- `BROWSING_ALLOW_COMPETITOR_EXPLORATION`
+- `BROWSING_ALLOW_OPEN_ENDED_QUERIES`
+- `BROWSING_MAX_SOURCES_PER_QUERY`
+- `BROWSING_RECENCY_WINDOW_DAYS`
+- `PREFER_TERMINAL_DECISION_BY_ITERATION`
+- `REJECT_ON_CONSECUTIVE_STAGNATION`
+- `REJECT_ON_TERMINATION_WARNING_NEXT_WEAK_ITERATION`
+- `REJECT_ON_UNRESOLVED_FATAL_FLAWS`
+- `ALLOW_REVISE_ON_FATAL_FLAW_WITH_DISPROOF_PATH`
+- `REQUIRE_JUDGE_PASS_FOR_PASS_ROUTING`
+- `REQUIRE_PASS_FOR_DOWNSTREAM_GENERATION`
+
+Validate environment state before startup:
+
+```bash
+npm run env:check
+```
+
+Useful scoped checks:
 
 ```bash
 npm run env:check -- --scope common,gateway-api
@@ -92,73 +198,360 @@ npm run env:check -- --scope telegram-bot --allow-placeholder-secrets
 npm run env:check -- --scope worker
 ```
 
-Start local infrastructure:
+## Local Development Commands
+
+Bootstrap only:
+
+```bash
+npm run bootstrap:dev
+```
+
+Start infrastructure only:
 
 ```bash
 npm run services:up
 npm run services:status
 ```
 
-Stop local infrastructure:
+Stop infrastructure:
 
 ```bash
 npm run services:down
 ```
 
-Seed local storage data:
+Run migrations:
+
+```bash
+npm run db:migrate
+```
+
+Seed development storage data:
 
 ```bash
 npm run seed:dev
 ```
 
-Run workspace checks:
+Verification:
 
 ```bash
 npm run build
 npm run typecheck
 npm run lint
 npm run test
+npm run test:acceptance
 npm run format
 ```
 
-## Package Responsibilities
+## Runtime Modes
+
+There are two execution modes:
+
+- `deterministic-local-runtime`
+  Uses the local deterministic worker runtime. Useful for offline development and stable tests.
+- `copilot-sdk`
+  Uses the GitHub Copilot SDK for model-backed agent execution and live web research.
+
+The worker selects the runtime mode from `COPILOT_RUNTIME_MODE`. In `copilot-sdk` mode, the selected model is currently global for the whole worker runtime. The system does not yet support a different model per agent.
+
+## Architecture
 
 ### Apps
 
-- `apps/telegram-bot`: Telegram command parsing, response formatting, and API integration.
-- `apps/gateway-api`: HTTP API surface for case creation, status, overrides, outputs, and downstream generation.
-- `apps/worker`: background job execution, orchestration, validation, and artifact generation.
+- `apps/gateway-api`
+  Case lifecycle API, operator reports, runtime model selection, health checks, and dashboard
+- `apps/telegram-bot`
+  Telegram command parsing, Telegram webhook verification, response formatting, and gateway integration
+- `apps/worker`
+  Queue consumers, agent execution, retry handling, routing decisions, and downstream artifact generation
 
-### Packages
+### Shared Packages
 
-- `packages/shared-types`: shared runtime contracts and validation primitives.
-- `packages/workflow-core`: case state machine, Judge routing, loop controls, and queue planning.
-- `packages/persistence`: PostgreSQL repositories, Redis helpers, and filesystem artifact access.
-- `packages/report-renderer`: approved business summary, business plan, PRD, and POC renderers.
-- `packages/agent-specs`: prompt template loading and access to versioned agent spec metadata.
+- `packages/shared-types`
+  Shared enums, DTOs, Zod schemas, runtime env loading, workflow config loading
+- `packages/workflow-core`
+  Agent runtime contracts, queue definitions, iteration planning, routing policy, retries, normalization
+- `packages/persistence`
+  PostgreSQL repositories and runtime settings persistence
+- `packages/report-renderer`
+  Markdown and JSON rendering for approved summaries and downstream docs
+- `packages/agent-specs`
+  YAML prompt registry and rendered prompt construction
 
-## Prompt Templates
+### Data Stores
 
-Prompt specs stay in-repo under `docs/agent-specs/*.yaml` and are loaded directly by `packages/agent-specs`. The runtime registry keeps each agent template traceable to its YAML source file and to the shared version defined in `docs/agent-specs/common.base.yaml`.
+- PostgreSQL stores:
+  cases, iterations, agent outputs, Judge tasks, score details, audit logs, approvals, prompt template versions, runtime settings
+- Redis stores:
+  BullMQ jobs and queue coordination
+- Filesystem stores:
+  generated case artifacts under `storage/cases/{caseId}/...`
 
-See `docs/agent-specs/README.md` for the YAML-to-`prompt_template_versions` mapping and the update workflow.
+## Standard Workflow
+
+The normal user path is:
+
+1. Create a case
+2. Start the workflow
+3. Poll status
+4. If approved, request PRD
+5. If PRD exists, request POC
+
+Judge controls the loop:
+
+- `PASS`
+  Case becomes eligible for downstream generation
+- `REVISE`
+  Targeted reruns are queued for the required upstream agents
+- `PIVOT`
+  A broader rerun path is queued, optionally invalidating prior research
+- `REJECT`
+  Case is closed and downstream generation is blocked
+
+## Telegram Setup
+
+1. Create a bot with `@BotFather`.
+2. Put the bot token in `.env` as `TELEGRAM_BOT_TOKEN`.
+3. Generate a webhook secret and put it in `.env` as `TELEGRAM_WEBHOOK_SECRET`.
+4. Start `gateway`, `worker`, and `telegram`.
+5. Expose the local Telegram webhook server on `TELEGRAM_WEBHOOK_PORT` over public HTTPS.
+6. Register the public webhook URL with Telegram.
+
+Example public tunnel with `localhost.run`:
+
+```bash
+ssh -R 80:localhost:3001 nokey@localhost.run
+```
+
+Example webhook registration:
+
+```bash
+curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
+  -H "Content-Type: application/json" \
+  -d "{\"url\":\"https://<PUBLIC_HOST>/telegram/webhook\",\"secret_token\":\"<YOUR_TELEGRAM_WEBHOOK_SECRET>\"}"
+```
+
+Verify registration:
+
+```bash
+curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getWebhookInfo"
+```
+
+Important:
+
+- Telegram requires a public HTTPS webhook URL
+- tunnel URLs are ephemeral unless you use a paid/fixed tunnel
+- if your tunnel URL changes, you must call `setWebhook` again
+
+## Telegram Commands
+
+User commands:
+
+- `/model`
+  Show current runtime mode, selected model, and available models
+- `/model {modelId}`
+  Set the global Copilot runtime model
+- `/model default`
+  Clear explicit model selection and use the SDK default
+- `/newidea {topic}`
+  Create a new case
+- `/startcase {caseId}`
+  Queue the first workflow run
+- `/status {caseId}`
+  Show case state, latest Judge decision, task summary, and downstream readiness
+- `/prd {caseId}`
+  Request PRD generation
+- `/poc {caseId}`
+  Request POC generation
+- `/next-topic`
+  Show the next queued topic
+- `/portfolio {limit}`
+  Show ranked cases and queue summary
+
+Operator-only commands:
+
+- `/approve {caseId} {FORCE_REVISE|FORCE_PIVOT|FORCE_PASS_TO_PRD}`
+- `/reject {caseId}`
+
+Do not type angle brackets literally. Use the real case ID directly.
+
+## Typical Telegram Session
+
+```text
+/model
+/newidea AI bookkeeping for freelancers
+/startcase 123e4567-e89b-12d3-a456-426614174000
+/status 123e4567-e89b-12d3-a456-426614174000
+/prd 123e4567-e89b-12d3-a456-426614174000
+/poc 123e4567-e89b-12d3-a456-426614174000
+```
+
+Typical outputs:
+
+- `/newidea`
+  returns a new `caseId`
+- `/startcase`
+  returns a queued workflow job ID
+- `/status`
+  returns current state, latest decision, PRD/POC readiness, and next steps
+- `/prd`
+  returns accepted/in-progress status
+- `/poc`
+  returns accepted/in-progress status
+
+## HTTP API Surface
+
+Main JSON routes exposed by `apps/gateway-api`:
+
+- `POST /api/cases`
+- `POST /api/cases/{caseId}/start`
+- `GET /api/cases/{caseId}`
+- `GET /api/cases/{caseId}/iterations`
+- `GET /api/cases/{caseId}/outputs`
+- `POST /api/cases/{caseId}/approve`
+- `POST /api/cases/{caseId}/reject`
+- `POST /api/cases/{caseId}/founder-value`
+- `POST /api/cases/{caseId}/generate-prd`
+- `POST /api/cases/{caseId}/generate-poc`
+- `GET /api/cases/next-topic`
+- `GET /api/cases/portfolio?limit=N`
+- `GET /api/runtime/model`
+- `PUT /api/runtime/model`
+- `GET /api/reports/metrics`
+- `GET /api/reports/opportunities`
+- `GET /health`
+- `GET /metrics`
+- `GET /dashboard`
+
+## Generated Artifacts
+
+Case artifacts are written under:
+
+```text
+storage/
+  cases/
+    {caseId}/
+      approved_business_summary.json
+      final_business_plan.md
+      prd.md
+      poc_spec.md
+      implementation_handoff.json
+      iterations/
+        {iterationNo}/
+          outputs/
+```
+
+The worker persists both raw and normalized agent outputs, but normalized output is the downstream source of truth.
+
+## Where To Change Agent Behavior
+
+There are several layers that affect how an agent behaves.
+
+### 1. Prompt spec YAML
+
+This is the primary place to change agent role, instructions, required sections, and JSON output shape:
+
+- `docs/agent-specs/common.base.yaml`
+- `docs/agent-specs/agent-a.fact-researcher.yaml`
+- `docs/agent-specs/agent-b.opportunity-strategist.yaml`
+- `docs/agent-specs/agent-c.vc-critic.yaml`
+- `docs/agent-specs/agent-d.prd-strategist.yaml`
+- `docs/agent-specs/agent-e.poc-architect.yaml`
+- `docs/agent-specs/agent-j.judge.yaml`
+
+### 2. Prompt assembly
+
+The final prompt sent to the model is assembled in:
+
+- `packages/agent-specs/src/registry.ts`
+- `packages/agent-specs/src/prompt-renderer.ts`
+
+### 3. Output validation and normalization
+
+If you change the agent's structured output, you may also need to update:
+
+- `packages/shared-types/src/agent-output-schemas.ts`
+- `packages/workflow-core/src/fact-researcher.ts`
+- `packages/workflow-core/src/opportunity-strategist.ts`
+- `packages/workflow-core/src/vc-critic.ts`
+- `packages/workflow-core/src/judge.ts`
+- `packages/workflow-core/src/prd-strategist.ts`
+- `packages/workflow-core/src/poc-architect.ts`
+
+### 4. Workflow routing
+
+If you want to change when an agent runs or reruns:
+
+- `packages/workflow-core/src/first-iteration.ts`
+- `packages/workflow-core/src/revise-flow.ts`
+- `packages/workflow-core/src/pivot-flow.ts`
+- `packages/workflow-core/src/routing-policy.ts`
+- `apps/worker/src/main.ts`
+
+### 5. Runtime and browsing settings
+
+If you want to change defaults for judge thresholds, research style, browsing autonomy, or runtime mode:
+
+- `.env`
+- `.env.example`
+- `packages/shared-types/src/config.ts`
+- `packages/shared-types/src/runtime-env.ts`
+- `apps/worker/src/web-research-tool.ts`
+
+## Model Selection
+
+The selected Copilot model is stored in the `runtime_settings` table and can be changed at runtime through either:
+
+- Telegram: `/model`
+- HTTP API: `PUT /api/runtime/model`
+
+Current limitation:
+
+- model selection is global for the worker runtime
+- there is no per-agent model assignment yet
 
 ## Founder-Value Capture
 
-Founder-value feedback can be recorded with `POST /api/cases/{caseId}/founder-value`. The initial capture is intentionally lightweight and operator-friendly:
+Founder-value feedback can be recorded with `POST /api/cases/{caseId}/founder-value`.
 
-- `perceivedUsefulnessScore`: 1-5
-- `confidenceIncreaseScore`: 1-5
-- `manualResearchMinutesSaved`: non-negative integer minutes
-- optional `respondentType`, `actor`, and `notes`
+The initial fields are:
 
-Measurements are persisted separately from audit logs, and each write also creates an audit log entry for traceability.
+- `perceivedUsefulnessScore`
+- `confidenceIncreaseScore`
+- `manualResearchMinutesSaved`
+- optional `respondentType`
+- optional `actor`
+- optional `notes`
 
-## Operator Reporting
+Each founder-value write also creates an audit log entry.
 
-Operators can inspect product-quality signals through `GET /api/reports/metrics`. The report returns the current product metrics snapshot together with aggregate founder-value feedback so the team can review MVP usefulness without parsing Prometheus output.
+## Troubleshooting
 
-## Source of Truth
+Health endpoint shows worker not ready:
+
+- make sure `npm run start:worker` is running
+- check Redis and PostgreSQL are healthy
+- check the worker heartbeat file under `STORAGE_ROOT`
+
+Telegram bot receives no updates:
+
+- confirm `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET`
+- confirm the Telegram process is running
+- confirm the public tunnel is alive
+- confirm `getWebhookInfo` points to the current public URL
+
+Copilot runtime fails:
+
+- verify `COPILOT_RUNTIME_MODE=copilot-sdk`
+- verify your local Copilot auth is valid or `GITHUB_TOKEN` is set
+- run `/model` or `GET /api/runtime/model` to inspect auth status and available models
+
+Case stays in queued or in-progress state:
+
+- check the worker logs
+- confirm Redis is reachable
+- confirm the worker process is connected to the same `REDIS_URL` and `DATABASE_URL` as the gateway
+
+## Source Of Truth
 
 Implementation must stay aligned with:
 
@@ -168,8 +561,8 @@ Implementation must stay aligned with:
 - `docs/agent-specs/*.yaml`
 - `docs/task.md`
 
-If any source-of-truth doc changes, record the change in the change log inside `docs/task.md` before implementing against it.
+If source-of-truth behavior changes, update the docs first, then implement.
 
 ## Contributing
 
-See `CONTRIBUTING.md` for the task-by-task workflow, verification expectations, and update rules for this repository.
+See `CONTRIBUTING.md` for the task workflow, verification expectations, and repository update rules.

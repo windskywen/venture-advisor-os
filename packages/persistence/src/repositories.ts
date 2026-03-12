@@ -3,6 +3,8 @@ import {
   AGENT_NAMES,
   ApprovalSchema,
   type Approval,
+  CopilotModelSelectionSchema,
+  type CopilotModelSelection,
   AuditLogSchema,
   type AuditLog,
   AgentOutputSchema,
@@ -36,6 +38,8 @@ const JsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
   ]),
 );
 
+const COPILOT_MODEL_SELECTION_SETTING_KEY = 'copilot-model-selection';
+
 export const PromptTemplateVersionSchema = z.object({
   templateVersionId: z.string().min(1),
   agentName: z.enum(AGENT_NAMES),
@@ -64,6 +68,12 @@ export interface ResolveOverrideInput extends ResolveApprovalInput {
 }
 
 export interface PersistenceRepositories {
+  runtimeSettings: {
+    getCopilotModelSelection(): Promise<CopilotModelSelection | null>;
+    setCopilotModelSelection(
+      selection: CopilotModelSelection,
+    ): Promise<CopilotModelSelection>;
+  };
   cases: {
     create(caseRecord: OpportunityCase): Promise<OpportunityCase>;
     getById(caseId: string): Promise<OpportunityCase | null>;
@@ -141,6 +151,45 @@ export function createPersistenceRepositories(
   executor: SqlExecutor,
 ): PersistenceRepositories {
   return {
+    runtimeSettings: {
+      async getCopilotModelSelection() {
+        const result = await executor.query(
+          `
+            SELECT setting_value
+            FROM runtime_settings
+            WHERE setting_key = $1
+          `,
+          [COPILOT_MODEL_SELECTION_SETTING_KEY],
+        );
+
+        if (!result.rows[0]) {
+          return null;
+        }
+
+        return mapCopilotModelSelection(result.rows[0]);
+      },
+      async setCopilotModelSelection(selection) {
+        const record = CopilotModelSelectionSchema.parse(selection);
+        const result = await executor.query(
+          `
+            INSERT INTO runtime_settings (setting_key, setting_value, updated_at)
+            VALUES ($1, $2::jsonb, $3)
+            ON CONFLICT (setting_key)
+            DO UPDATE SET
+              setting_value = EXCLUDED.setting_value,
+              updated_at = EXCLUDED.updated_at
+            RETURNING setting_value
+          `,
+          [
+            COPILOT_MODEL_SELECTION_SETTING_KEY,
+            toJsonb(record),
+            record.updatedAt,
+          ],
+        );
+
+        return mapCopilotModelSelection(result.rows[0]);
+      },
+    },
     cases: {
       async create(caseRecord) {
         const record = OpportunityCaseSchema.parse(caseRecord);
@@ -901,6 +950,12 @@ function mapOpportunityCase(row: Record<string, unknown>): OpportunityCase {
     createdAt: toTimestamp(row.created_at),
     updatedAt: toTimestamp(row.updated_at),
   });
+}
+
+function mapCopilotModelSelection(
+  row: Record<string, unknown>,
+): CopilotModelSelection {
+  return CopilotModelSelectionSchema.parse(row.setting_value);
 }
 
 function mapIteration(row: Record<string, unknown>): Iteration {

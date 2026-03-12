@@ -7,6 +7,7 @@
   },
   "include": ["src/**/*.ts"],
   "references": [
+    { "path": "../../packages/agent-specs" },
     { "path": "../../packages/persistence" },
     { "path": "../../packages/report-renderer" },
     { "path": "../../packages/shared-types" },

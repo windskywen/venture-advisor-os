@@ -6,6 +6,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "dependencies": {
+    "@github/copilot-sdk": "^0.1.32",
     "@venture-advisor-os/agent-specs": "0.1.0",
     "@venture-advisor-os/shared-types": "0.1.0",
     "bullmq": "^5.63.0"

@@ -63,6 +63,23 @@ export type BrowsingAutonomyInput = z.infer<
   typeof BrowsingAutonomyInputSchema
 >;
 
+export const AgentRuntimeModeSchema = z.enum([
+  'deterministic-local-runtime',
+  'copilot-sdk',
+]);
+
+export type AgentRuntimeMode = z.infer<typeof AgentRuntimeModeSchema>;
+
+export const CopilotModelSelectionSchema = z.object({
+  modelId: z.string().trim().min(1).nullable().default(null),
+  updatedAt: TimestampSchema,
+  updatedBy: z.string().trim().min(1),
+});
+
+export type CopilotModelSelection = z.infer<
+  typeof CopilotModelSelectionSchema
+>;
+
 export const DEFAULT_RESEARCH_STYLE: ResearchStyle = 'BALANCED';
 
 export const BROWSING_AUTONOMY_PRESETS: Record<

@@ -10,8 +10,10 @@ import type {
 } from './enums.js';
 import type { JudgeTaskDto } from './judge-task.js';
 import type {
+  AgentRuntimeMode,
   BrowsingAutonomy,
   BrowsingAutonomyInput,
+  CopilotModelSelection,
   FounderValueMeasurement,
 } from './schemas.js';
 
@@ -223,5 +225,33 @@ export interface OpportunityRankingReportDto {
     byStatus: Partial<Record<CaseStatus, number>>;
   };
 }
+
+export interface RuntimeModelOptionDto {
+  id: string;
+  name: string;
+  supportsReasoningEffort: boolean;
+  defaultReasoningEffort?: string;
+}
+
+export interface RuntimeModelAuthStatusDto {
+  isAuthenticated: boolean;
+  authType?: string;
+  login?: string;
+  statusMessage?: string;
+}
+
+export interface GetRuntimeModelResponseDto {
+  runtimeMode: AgentRuntimeMode;
+  selection: CopilotModelSelection;
+  auth: RuntimeModelAuthStatusDto;
+  availableModels: RuntimeModelOptionDto[];
+}
+
+export interface UpdateRuntimeModelRequestDto {
+  modelId?: string;
+  updatedBy?: string;
+}
+
+export type UpdateRuntimeModelResponseDto = GetRuntimeModelResponseDto;
 
 export type { JudgeTaskDto };

@@ -127,6 +127,13 @@ export function createTelegramCommandHandler(
             text: await app.getPortfolio(argumentTokens[0]),
           };
         }
+
+        if (command === '/model') {
+          return {
+            handled: true,
+            text: await app.getRuntimeModel(argumentTokens.join(' ')),
+          };
+        }
       } catch (error) {
         if (error instanceof TelegramBotCommandError) {
           return {

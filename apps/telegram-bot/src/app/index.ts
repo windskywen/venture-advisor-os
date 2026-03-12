@@ -4,11 +4,13 @@ import type {
   CaseActionResponseDto,
   CreateCaseRequestDto,
   CreateCaseResponseDto,
+  GetRuntimeModelResponseDto,
   GetCaseOutputsResponseDto,
   JudgeTaskPromptInput,
   NextTopicResponseDto,
   PortfolioOverviewDto,
   StartCaseResponseDto,
+  UpdateRuntimeModelRequestDto,
 } from '@venture-advisor-os/shared-types';
 
 export const TELEGRAM_BOT_APP_LAYER = '@venture-advisor-os/telegram-bot/app';
@@ -27,6 +29,10 @@ export interface TelegramBotGatewayApi {
   generatePoc(caseId: string): Promise<CaseActionResponseDto>;
   getNextTopic(): Promise<NextTopicResponseDto>;
   getPortfolio(limit?: number): Promise<PortfolioOverviewDto>;
+  getRuntimeModel(): Promise<GetRuntimeModelResponseDto>;
+  updateRuntimeModel(
+    request: UpdateRuntimeModelRequestDto,
+  ): Promise<GetRuntimeModelResponseDto>;
 }
 
 export interface TelegramBotAppDependencies {
@@ -43,6 +49,7 @@ export interface TelegramBotApp {
   requestPoc(caseId: string): Promise<string>;
   getNextTopic(): Promise<string>;
   getPortfolio(limitToken?: string): Promise<string>;
+  getRuntimeModel(selectionToken?: string): Promise<string>;
 }
 
 export function createTelegramBotApp(
@@ -147,6 +154,18 @@ export function createTelegramBotApp(
 
       return formatPortfolioOverview(portfolio);
     },
+    async getRuntimeModel(selectionToken) {
+      const normalizedSelection = normalizeModelSelectionToken(selectionToken);
+      const runtimeModel =
+        normalizedSelection === undefined
+          ? await dependencies.gatewayApi.getRuntimeModel()
+          : await dependencies.gatewayApi.updateRuntimeModel({
+              modelId: normalizedSelection,
+              updatedBy: 'telegram',
+            });
+
+      return formatRuntimeModelSummary(runtimeModel);
+    },
   };
 }
 
@@ -209,6 +228,32 @@ function formatCaseStatusSummary(
   lines.push(`POC: ${resolvePocReadiness(caseSummary)}`);
   lines.push(`Next: ${formatNextSteps(caseSummary.nextSteps)}`);
 
+  return lines.join('\n');
+}
+
+function formatRuntimeModelSummary(
+  runtimeModel: GetRuntimeModelResponseDto,
+): string {
+  const lines = [
+    `Runtime: ${runtimeModel.runtimeMode}`,
+    `Selected: ${runtimeModel.selection.modelId ?? 'SDK default'}`,
+    runtimeModel.auth.isAuthenticated
+      ? `Auth: ready${runtimeModel.auth.login ? ` (${runtimeModel.auth.login})` : ''}`
+      : `Auth: not ready${runtimeModel.auth.statusMessage ? ` - ${runtimeModel.auth.statusMessage}` : ''}`,
+  ];
+
+  if (runtimeModel.availableModels.length > 0) {
+    lines.push('Models:');
+    for (const model of runtimeModel.availableModels) {
+      lines.push(
+        `- ${model.id}${model.supportsReasoningEffort && model.defaultReasoningEffort ? ` (${model.defaultReasoningEffort})` : ''}`,
+      );
+    }
+  } else {
+    lines.push('Models: unavailable');
+  }
+
+  lines.push('Use /model {modelId} to switch or /model default to clear.');
   return lines.join('\n');
 }
 
@@ -284,6 +329,17 @@ function normalizePortfolioLimit(limitToken?: string): number | undefined {
   }
 
   return parsedLimit;
+}
+
+function normalizeModelSelectionToken(
+  selectionToken?: string,
+): string | undefined {
+  const normalizedSelection = selectionToken?.trim();
+  if (!normalizedSelection || normalizedSelection.length === 0) {
+    return undefined;
+  }
+
+  return normalizedSelection;
 }
 
 function normalizeCaseId(caseId: string, usageMessage: string): string {

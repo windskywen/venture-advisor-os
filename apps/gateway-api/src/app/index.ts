@@ -7,6 +7,7 @@ import {
 } from '@venture-advisor-os/workflow-core';
 import {
   type Approval,
+  type AgentRuntimeMode,
   type AgentOutput,
   type ApproveCaseRequestDto,
   BrowsingAutonomyInputSchema,
@@ -18,6 +19,7 @@ import {
   FounderValueMeasurementSchema,
   type FounderValueMeasurement,
   type GetCaseOutputsResponseDto,
+  type GetRuntimeModelResponseDto,
   type GetCaseIterationsResponseDto,
   type Iteration,
   type NextTopicResponseDto,
@@ -30,6 +32,8 @@ import {
   type RejectCaseRequestDto,
   type RecordFounderValueMeasurementRequestDto,
   type RecordFounderValueMeasurementResponseDto,
+  type RuntimeModelAuthStatusDto,
+  type RuntimeModelOptionDto,
   OpportunityCaseSchema,
   loadWorkflowConfig,
   type CreateCaseRequestDto,
@@ -38,9 +42,12 @@ import {
   type OpportunityCase,
   type StartCaseResponseDto,
   type StructuredLogger,
+  CopilotModelSelectionSchema,
   createNoopStructuredLogger,
   isHighRiskHumanOverrideAction,
   ResearchStyleSchema,
+  type UpdateRuntimeModelRequestDto,
+  type UpdateRuntimeModelResponseDto,
 } from '@venture-advisor-os/shared-types';
 import { z } from 'zod';
 
@@ -84,6 +91,10 @@ const RejectCaseRequestSchema = z.object({
     .optional(),
   portfolioEscalationMetadata: z.record(z.string(), z.unknown()).optional(),
 });
+const UpdateRuntimeModelRequestSchema = z.object({
+  modelId: z.string().trim().optional(),
+  updatedBy: TrimmedOptionalStringSchema,
+});
 const RecordFounderValueMeasurementRequestSchema = z.object({
   respondentType: z.enum(['OPERATOR', 'FOUNDER']).default('OPERATOR'),
   actor: TrimmedOptionalStringSchema,
@@ -96,6 +107,22 @@ const PortfolioLimitSchema = z.number().int().positive().max(50).default(5);
 
 export interface GatewayApiAppDependencies {
   repositories: {
+    runtimeSettings?: {
+      getCopilotModelSelection(): Promise<{
+        modelId: string | null;
+        updatedAt: string;
+        updatedBy: string;
+      } | null>;
+      setCopilotModelSelection(input: {
+        modelId: string | null;
+        updatedAt: string;
+        updatedBy: string;
+      }): Promise<{
+        modelId: string | null;
+        updatedAt: string;
+        updatedBy: string;
+      }>;
+    };
     cases: {
       create(caseRecord: OpportunityCase): Promise<OpportunityCase>;
       getById(caseId: string): Promise<OpportunityCase | null>;
@@ -174,7 +201,12 @@ export interface GatewayApiAppDependencies {
   };
   now?: () => Date;
   workflowConfig?: ReturnType<typeof loadWorkflowConfig>;
+  agentRuntimeMode?: AgentRuntimeMode;
   logger?: StructuredLogger;
+  runtimeModelCatalog?: {
+    getAuthStatus(): Promise<RuntimeModelAuthStatusDto>;
+    listAvailableModels(): Promise<RuntimeModelOptionDto[]>;
+  };
   reporting?: {
     getOperatorMetricsReport(): Promise<OperatorMetricsReportDto>;
     getOpportunityRankingReport?(): Promise<OpportunityRankingReportDto>;
@@ -199,6 +231,10 @@ export interface GatewayApiApp {
     caseId: string,
     request: RecordFounderValueMeasurementRequestDto,
   ): Promise<RecordFounderValueMeasurementResponseDto>;
+  getRuntimeModel(): Promise<GetRuntimeModelResponseDto>;
+  updateRuntimeModel(
+    request: UpdateRuntimeModelRequestDto,
+  ): Promise<UpdateRuntimeModelResponseDto>;
   getOperatorMetricsReport(): Promise<OperatorMetricsReportDto>;
   getOpportunityRankingReport(): Promise<OpportunityRankingReportDto>;
   generatePrd(caseId: string): Promise<CaseActionResponseDto>;
@@ -213,7 +249,22 @@ export function createGatewayApiApp(
   const now = dependencies.now ?? (() => new Date());
   const workflowConfig =
     dependencies.workflowConfig ?? loadWorkflowConfig(process.env);
+  const agentRuntimeMode =
+    dependencies.agentRuntimeMode ?? 'deterministic-local-runtime';
   const logger = dependencies.logger ?? createNoopStructuredLogger();
+  const runtimeSettingsRepository =
+    dependencies.repositories.runtimeSettings ?? {
+      async getCopilotModelSelection() {
+        return null;
+      },
+      async setCopilotModelSelection(input: {
+        modelId: string | null;
+        updatedAt: string;
+        updatedBy: string;
+      }) {
+        return input;
+      },
+    };
 
   return {
     async createCase(request) {
@@ -665,6 +716,47 @@ export function createGatewayApiApp(
 
       return createdMeasurement;
     },
+    async getRuntimeModel() {
+      return buildRuntimeModelResponse();
+    },
+    async updateRuntimeModel(request) {
+      const parsedRequest = UpdateRuntimeModelRequestSchema.parse(request);
+      const normalizedModelId = normalizeSelectedModelId(parsedRequest.modelId);
+
+      if (normalizedModelId !== null) {
+        const availableModels =
+          await dependencies.runtimeModelCatalog?.listAvailableModels();
+        if (
+          availableModels &&
+          availableModels.length > 0 &&
+          availableModels.some((model) => model.id === normalizedModelId) === false
+        ) {
+          throw new GatewayApiAppError(
+            400,
+            `Model ${normalizedModelId} is not available from the Copilot runtime.`,
+          );
+        }
+      }
+
+      await runtimeSettingsRepository.setCopilotModelSelection(
+        CopilotModelSelectionSchema.parse({
+          modelId: normalizedModelId,
+          updatedAt: now().toISOString(),
+          updatedBy: parsedRequest.updatedBy ?? 'system',
+        }),
+      );
+
+      logger.info(
+        'runtime.model.updated',
+        'Updated the selected Copilot runtime model.',
+        {
+          runtimeMode: agentRuntimeMode,
+          selectedModelId: normalizedModelId,
+        },
+      );
+
+      return buildRuntimeModelResponse();
+    },
     async generatePrd(caseId) {
       const normalizedCaseId = SafeCaseIdSchema.parse(caseId);
       const caseRecord =
@@ -920,6 +1012,32 @@ export function createGatewayApiApp(
     },
   };
 
+  async function buildRuntimeModelResponse(): Promise<GetRuntimeModelResponseDto> {
+    const [selection, auth, availableModels] = await Promise.all([
+      runtimeSettingsRepository.getCopilotModelSelection(),
+      dependencies.runtimeModelCatalog?.getAuthStatus() ??
+        Promise.resolve<RuntimeModelAuthStatusDto>({
+          isAuthenticated: false,
+          statusMessage: 'Copilot runtime catalog is not configured.',
+        }),
+      dependencies.runtimeModelCatalog?.listAvailableModels() ??
+        Promise.resolve<RuntimeModelOptionDto[]>([]),
+    ]);
+
+    return {
+      runtimeMode: agentRuntimeMode,
+      selection:
+        selection ??
+        CopilotModelSelectionSchema.parse({
+          modelId: null,
+          updatedAt: now().toISOString(),
+          updatedBy: 'system',
+        }),
+      auth,
+      availableModels,
+    };
+  }
+
   async function buildCaseSummary(caseId: string): Promise<CaseSummaryDto> {
     const caseRecord = await dependencies.repositories.cases.getById(caseId);
     if (!caseRecord) {
@@ -1122,6 +1240,19 @@ function resolveLatestDecision(
   }
 
   return caseRecord.finalDecision;
+}
+
+function normalizeSelectedModelId(modelId: string | undefined): string | null {
+  const normalizedModelId = modelId?.trim();
+  if (!normalizedModelId || normalizedModelId.length === 0) {
+    return null;
+  }
+
+  if (['default', 'auto', 'clear'].includes(normalizedModelId.toLowerCase())) {
+    return null;
+  }
+
+  return normalizedModelId;
 }
 
 function buildNextSteps(

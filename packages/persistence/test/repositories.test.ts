@@ -381,4 +381,53 @@ describe('persistence repositories', () => {
       },
     ]);
   });
+
+  it('persists the selected Copilot model for runtime use', async () => {
+    const executedQueries: Array<{ sql: string; params?: readonly unknown[] }> =
+      [];
+    const executor: SqlExecutor = {
+      async query(sql, params) {
+        executedQueries.push({ sql, params });
+
+        return {
+          command: 'INSERT',
+          rowCount: 1,
+          oid: 0,
+          fields: [],
+          rows: [
+            {
+              setting_value: {
+                modelId: 'gpt-5-mini',
+                updatedAt: '2026-03-13T00:15:00.000Z',
+                updatedBy: 'telegram',
+              },
+            },
+          ],
+        };
+      },
+    };
+
+    const repositories = createPersistenceRepositories(executor);
+
+    const selection = await repositories.runtimeSettings.setCopilotModelSelection({
+      modelId: 'gpt-5-mini',
+      updatedAt: '2026-03-13T00:15:00.000Z',
+      updatedBy: 'telegram',
+    });
+
+    expect(executedQueries[0]?.sql).toContain('INSERT INTO runtime_settings');
+    expect(executedQueries[0]?.params?.[0]).toBe('copilot-model-selection');
+    expect(executedQueries[0]?.params?.[1]).toBe(
+      JSON.stringify({
+        modelId: 'gpt-5-mini',
+        updatedAt: '2026-03-13T00:15:00.000Z',
+        updatedBy: 'telegram',
+      }),
+    );
+    expect(selection).toEqual({
+      modelId: 'gpt-5-mini',
+      updatedAt: '2026-03-13T00:15:00.000Z',
+      updatedBy: 'telegram',
+    });
+  });
 });

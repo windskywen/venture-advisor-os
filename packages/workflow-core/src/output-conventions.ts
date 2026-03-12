@@ -70,6 +70,7 @@ export function validateOutputConventions(
 
   if (
     template.common.output_conventions.citation_required_for_facts &&
+    requiresCitationMarkers(input.agentName) &&
     !hasCitationMarker(input.markdown)
   ) {
     errors.push('Citation markers are required for factual claims.');
@@ -92,6 +93,10 @@ export function validateOutputConventions(
     valid: errors.length === 0,
     errors,
   };
+}
+
+function requiresCitationMarkers(agentName: string): boolean {
+  return agentName === 'FactResearcher' || agentName === 'Judge';
 }
 
 function hasCitationMarker(markdown: string): boolean {

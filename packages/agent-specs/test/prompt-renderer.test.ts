@@ -63,6 +63,8 @@ describe('prompt renderer', () => {
       '[blocking] EVIDENCE_REFRESH: Refresh the latest market evidence.',
     ]);
     expect(rendered.prompt).toContain('## Required Markdown Sections');
+    expect(rendered.prompt).toContain('## Output Skeleton');
+    expect(rendered.prompt).toContain('## Market Problem Definition');
     expect(rendered.prompt).toContain('Market Problem Definition');
     expect(rendered.prompt).toContain('Do not infer a business model without evidence.');
   });

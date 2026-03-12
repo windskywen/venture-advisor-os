@@ -13,6 +13,7 @@
     "npm": ">=11.0.0"
   },
   "scripts": {
+    "postinstall": "node ./scripts/postinstall.mjs",
     "build": "tsc -b tsconfig.json",
     "typecheck": "tsc -b tsconfig.json --pretty false",
     "lint": "eslint . --max-warnings=0 && npm run validate:boundaries",
@@ -28,6 +29,12 @@
     "setup:dev": "node ./scripts/setup-dev.mjs",
     "seed:dev": "node ./scripts/seed-dev.mjs",
     "db:migrate": "npm run migrate -w @venture-advisor-os/persistence",
+    "start:gateway": "node apps/gateway-api/dist/main.js",
+    "run:gateway": "npm run build && npm run start:gateway",
+    "start:worker": "node apps/worker/dist/main.js",
+    "run:worker": "npm run build && npm run start:worker",
+    "start:telegram": "node apps/telegram-bot/dist/main.js",
+    "run:telegram": "npm run build && npm run start:telegram",
     "services:up": "docker compose up -d postgres redis",
     "services:down": "docker compose down",
     "services:status": "docker compose ps"

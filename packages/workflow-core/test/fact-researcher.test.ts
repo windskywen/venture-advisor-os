@@ -183,4 +183,86 @@ describe('FactResearcher execution and normalization', () => {
       },
     ]);
   });
+
+  it('retries once when the first FactResearcher response misses the format contract', async () => {
+    const registry = loadPromptTemplateRegistry({
+      repoRoot: process.cwd(),
+    });
+    const prompts: string[] = [];
+    let callCount = 0;
+    const researchTool = createResearchTool((query) => ({
+      query,
+      findings: [
+        {
+          claim: 'Manual note capture is still common.',
+          facts: ['Manual note capture slows consultants down.'],
+          sources: [
+            {
+              title: 'Industry report',
+              snippet: 'Documentation is still manual.',
+              sourceType: 'report',
+              citation: {
+                label: '[1]',
+                url: 'https://example.com/report',
+                publishedAt: '2026-03-01T00:00:00.000Z',
+                retrievedAt: '2026-03-10T00:00:00.000Z',
+              },
+            },
+          ],
+        },
+      ],
+    }));
+    const runtime = createMockAgentRuntimeAdapter((request) => {
+      prompts.push(request.prompt);
+      callCount += 1;
+
+      return {
+        agentName: request.agentName,
+        rawOutput:
+          callCount === 1
+            ? 'Here is a quick answer without the required sections.'
+            : renderCompliantAgentOutput(registry, request.agentName, {
+                market_problem_definition:
+                  'Consultants spend too much time documenting meetings.',
+                target_user_segments: ['Consultants'],
+                pain_points: ['Manual documentation'],
+                workflow_gaps: ['No structured note workflow'],
+                current_alternatives: ['Word docs'],
+                competitors: [
+                  {
+                    name: 'Tool A',
+                    positioning: 'Meeting notes',
+                    weakness_or_gap: 'Not tailored to consulting',
+                  },
+                ],
+                evidence: [
+                  {
+                    claim: 'Consultants spend hours documenting meetings.',
+                    source_date: '2026-03-01',
+                    source_type: 'report',
+                    confidence: 'high',
+                  },
+                ],
+                assumptions: ['AI summarization quality is sufficient.'],
+              }),
+      };
+    });
+
+    const result = await executeFactResearcher({
+      registry,
+      runtime,
+      researchTool,
+      caseContext: {
+        topic: 'AI note-taking for consultants',
+        iteration_no: 1,
+      },
+      requestedAt: '2026-03-10T00:00:00.000Z',
+    });
+
+    expect(result.normalizedOutput.market_problem_definition).toContain(
+      'Consultants spend too much time',
+    );
+    expect(prompts).toHaveLength(2);
+    expect(prompts[1]).toContain('Previous validation errors:');
+  });
 });

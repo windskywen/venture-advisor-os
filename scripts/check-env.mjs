@@ -11,7 +11,6 @@ const requirements = {
   'gateway-api': ['API_PORT'],
   'telegram-bot': ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_WEBHOOK_SECRET'],
   worker: [
-    'COPILOT_RUNTIME_PATH',
     'AGENT_TIMEOUT_MS',
     'REPORT_RENDER_TIMEOUT_MS',
     'PRD_GENERATION_TIMEOUT_MS',
@@ -59,7 +58,10 @@ if (includesScope('worker')) {
   validatePositiveInteger('REPORT_RENDER_TIMEOUT_MS');
   validatePositiveInteger('PRD_GENERATION_TIMEOUT_MS');
   validatePositiveInteger('POC_GENERATION_TIMEOUT_MS');
-  validateAbsolutePath('COPILOT_RUNTIME_PATH');
+  validateEnum('COPILOT_RUNTIME_MODE', [
+    'deterministic-local-runtime',
+    'copilot-sdk',
+  ]);
 }
 
 if (missing.length > 0 || invalid.length > 0) {
@@ -188,6 +190,20 @@ function validateAbsolutePath(name) {
 
   if (!isAbsolute(value)) {
     invalid.push({ name, reason: 'must be an absolute filesystem path' });
+  }
+}
+
+function validateEnum(name, supportedValues) {
+  const value = env[name];
+  if (!hasValue(value)) {
+    return;
+  }
+
+  if (!supportedValues.includes(value.trim())) {
+    invalid.push({
+      name,
+      reason: `must be one of: ${supportedValues.join(', ')}`,
+    });
   }
 }
 

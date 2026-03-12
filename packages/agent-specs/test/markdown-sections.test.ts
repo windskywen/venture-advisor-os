@@ -80,4 +80,35 @@ describe('required markdown section validation', () => {
 
     expect(parseResult.success).toBe(true);
   });
+
+  it('accepts standalone section labels without markdown hashes', () => {
+    const registry = loadPromptTemplateRegistry();
+    const factResearcherSpec = registry.agents.FactResearcher;
+
+    const markdown = [
+      'Market Problem Definition',
+      'Problem detail.',
+      'Target User Segments',
+      '- Consultants',
+      'Pain Points',
+      '- Manual documentation',
+      'Workflow Gaps',
+      '- No structured note workflow',
+      'Current Alternatives',
+      '- Word docs',
+      'Competitor Snapshot (high-level - inferred from industry roundups)',
+      '- Tool A',
+      'Evidence List',
+      '- Source [1]',
+      'Facts vs Assumptions',
+      '- Facts: supported by source [1]',
+      '- Inference: workflow opportunity exists',
+      '- Assumptions: buyers will pay',
+    ].join('\n\n');
+
+    const parseResult =
+      factResearcherSpec.requiredMarkdownSectionsSchema.safeParse(markdown);
+
+    expect(parseResult.success).toBe(true);
+  });
 });

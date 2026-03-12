@@ -13,6 +13,9 @@ describe('runtime environment validation', () => {
       REDIS_URL: 'redis://localhost:6379',
       STORAGE_ROOT: './storage',
       API_PORT: '3000',
+      COPILOT_RUNTIME_MODE: 'copilot-sdk',
+      COPILOT_USE_LOGGED_IN_USER: 'false',
+      GITHUB_TOKEN: 'ghp_test_token',
       JUDGE_VC_PASS_THRESHOLD: '8.1',
       JUDGE_EVIDENCE_PASS_THRESHOLD: '7.4',
       DEFAULT_RESEARCH_STYLE: 'COMPETITOR_INTENSIVE',
@@ -28,6 +31,9 @@ describe('runtime environment validation', () => {
     });
 
     expect(config.apiPort).toBe(3000);
+    expect(config.agentRuntimeMode).toBe('copilot-sdk');
+    expect(config.useLoggedInUser).toBe(false);
+    expect(config.githubToken).toBe('ghp_test_token');
     expect(config.workflowConfig.timeoutBudgets.agentRunMs).toBe(300000);
     expect(config.workflowConfig.judgeThresholds).toEqual({
       vcPass: 8.1,
@@ -54,13 +60,24 @@ describe('runtime environment validation', () => {
     ).toThrow('non-placeholder value');
   });
 
-  it('requires worker storage and copilot runtime configuration', () => {
+  it('defaults worker runtime selection to the deterministic adapter', () => {
+    const config = loadWorkerRuntimeEnvironment({
+      DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/ventrueadvisor',
+      REDIS_URL: 'redis://localhost:6379',
+      STORAGE_ROOT: './storage',
+    });
+
+    expect(config.agentRuntimeMode).toBe('deterministic-local-runtime');
+    expect(config.copilotCliPath).toBeUndefined();
+    expect(config.useLoggedInUser).toBe(true);
+  });
+
+  it('requires common worker storage configuration', () => {
     expect(() =>
       loadWorkerRuntimeEnvironment({
         DATABASE_URL: 'postgres://postgres:postgres@localhost:5432/ventrueadvisor',
         REDIS_URL: 'redis://localhost:6379',
-        STORAGE_ROOT: './storage',
-        COPILOT_RUNTIME_PATH: '',
+        STORAGE_ROOT: '',
       }),
     ).toThrow('Too small');
   });
