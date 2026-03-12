@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [
+    { "path": "../../packages/persistence" },
+    { "path": "../../packages/report-renderer" },
+    { "path": "../../packages/shared-types" },
+    { "path": "../../packages/workflow-core" }
+  ]
+}

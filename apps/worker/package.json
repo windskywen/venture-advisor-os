@@ -1,0 +1,18 @@
+{
+  "name": "@venture-advisor-os/worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "@venture-advisor-os/persistence": "0.1.0",
+    "@venture-advisor-os/report-renderer": "0.1.0",
+    "@venture-advisor-os/shared-types": "0.1.0",
+    "@venture-advisor-os/workflow-core": "0.1.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}

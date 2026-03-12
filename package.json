@@ -1,0 +1,50 @@
+{
+  "name": "venture-advisor-os",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.6.1",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=24.0.0",
+    "npm": ">=11.0.0"
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.json",
+    "typecheck": "tsc -b tsconfig.json --pretty false",
+    "lint": "eslint . --max-warnings=0 && npm run validate:boundaries",
+    "test": "vitest run",
+    "test:acceptance": "vitest run apps/telegram-bot/test/telegram-gateway-integration.test.ts apps/gateway-api/test/create-case.test.ts apps/gateway-api/test/start-case.test.ts apps/gateway-api/test/get-case.test.ts apps/gateway-api/test/get-case-async-status.test.ts apps/gateway-api/test/approve-case.test.ts apps/gateway-api/test/reject-case.test.ts apps/gateway-api/test/record-founder-value.test.ts apps/gateway-api/test/generate-prd.test.ts apps/gateway-api/test/generate-poc.test.ts apps/gateway-api/test/request-protections.test.ts apps/gateway-api/test/health-metrics.test.ts apps/gateway-api/test/operator-metrics-report.test.ts apps/telegram-bot/test/security-boundaries.test.ts apps/worker/test/downstream-artifacts.test.ts packages/workflow-core/test/workflow-e2e.test.ts packages/workflow-core/test/judge.test.ts packages/workflow-core/test/revise-flow.test.ts packages/workflow-core/test/pivot-flow.test.ts packages/workflow-core/test/pass-flow.test.ts packages/workflow-core/test/reject-flow.test.ts packages/workflow-core/test/downstream-gating.test.ts packages/workflow-core/test/agent-run-persistence.test.ts packages/workflow-core/test/malformed-output-retry.test.ts packages/workflow-core/test/retry-policy.test.ts packages/workflow-core/test/output-conventions.test.ts packages/workflow-core/test/output-sections.test.ts packages/persistence/test/repositories.test.ts packages/persistence/test/product-metrics.test.ts packages/persistence/test/operator-metrics-report.test.ts packages/agent-specs/test/markdown-sections.test.ts packages/agent-specs/test/registry.test.ts packages/shared-types/test/runtime-env.test.ts packages/shared-types/test/mvp-permissions.test.ts",
+    "validate:boundaries": "node ./scripts/validate-ownership-boundaries.mjs",
+    "validate:schemas": "node ./scripts/validate-agent-schemas.mjs",
+    "validate:prompts": "node ./scripts/validate-prompt-specs.mjs",
+    "format": "prettier --check .",
+    "format:write": "prettier --write .",
+    "env:check": "node ./scripts/check-env.mjs",
+    "bootstrap:dev": "node ./scripts/bootstrap-dev.mjs",
+    "setup:dev": "node ./scripts/setup-dev.mjs",
+    "seed:dev": "node ./scripts/seed-dev.mjs",
+    "db:migrate": "npm run migrate -w @venture-advisor-os/persistence",
+    "services:up": "docker compose up -d postgres redis",
+    "services:down": "docker compose down",
+    "services:status": "docker compose ps"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.4.0",
+    "@types/pg": "^8.18.0",
+    "eslint": "^10.0.3",
+    "globals": "^17.4.0",
+    "prettier": "^3.8.1",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.0",
+    "vitest": "^4.0.18",
+    "yaml": "^2.8.2"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
+  }
+}

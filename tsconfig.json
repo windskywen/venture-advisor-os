@@ -1,0 +1,13 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./apps/telegram-bot" },
+    { "path": "./apps/gateway-api" },
+    { "path": "./apps/worker" },
+    { "path": "./packages/shared-types" },
+    { "path": "./packages/workflow-core" },
+    { "path": "./packages/persistence" },
+    { "path": "./packages/report-renderer" },
+    { "path": "./packages/agent-specs" }
+  ]
+}

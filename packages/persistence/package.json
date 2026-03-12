@@ -1,0 +1,17 @@
+{
+  "name": "@venture-advisor-os/persistence",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "@venture-advisor-os/shared-types": "0.1.0",
+    "pg": "^8.16.3"
+  },
+  "scripts": {
+    "migrate": "node ./scripts/run-migrations.mjs",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  }
+}
